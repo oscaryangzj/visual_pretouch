@@ -1,0 +1,11 @@
+source_review: review_session_20260917013532709_2_v1
+detection_mode: full
+annotation:
+  output_width_px: 1920
+  marker_radius_px: 12
+  marker_thickness_px: 3
+  text_scale: 0.7
+  video_crf: 20
+  video_preset: fast
+  zoom_source_preview_px: [320, 115, 510, 380]
+  zoom_destination_px: [1260, 148, 1900, 1040]

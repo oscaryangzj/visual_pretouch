@@ -1,0 +1,110 @@
+[
+  {
+    "trial_index": 0,
+    "flash_time_video_ms": 5400.0,
+    "frame_index": 130,
+    "video_time_ms": 5200.0,
+    "actual_before_flash_ms": 200.0,
+    "full_detected": 1,
+    "crop_detected": 1
+  },
+  {
+    "trial_index": 0,
+    "flash_time_video_ms": 5400.0,
+    "frame_index": 132,
+    "video_time_ms": 5280.0,
+    "actual_before_flash_ms": 120.0,
+    "full_detected": 1,
+    "crop_detected": 1
+  },
+  {
+    "trial_index": 0,
+    "flash_time_video_ms": 5400.0,
+    "frame_index": 134,
+    "video_time_ms": 5360.0,
+    "actual_before_flash_ms": 40.0,
+    "full_detected": 1,
+    "crop_detected": 1
+  },
+  {
+    "trial_index": 0,
+    "flash_time_video_ms": 5400.0,
+    "frame_index": 135,
+    "video_time_ms": 5400.0,
+    "actual_before_flash_ms": 0.0,
+    "full_detected": 1,
+    "crop_detected": 1
+  },
+  {
+    "trial_index": 14,
+    "flash_time_video_ms": 28560.000000000004,
+    "frame_index": 709,
+    "video_time_ms": 28360.000000000004,
+    "actual_before_flash_ms": 200.0,
+    "full_detected": 1,
+    "crop_detected": 1
+  },
+  {
+    "trial_index": 14,
+    "flash_time_video_ms": 28560.000000000004,
+    "frame_index": 711,
+    "video_time_ms": 28440.0,
+    "actual_before_flash_ms": 120.00000000000364,
+    "full_detected": 1,
+    "crop_detected": 1
+  },
+  {
+    "trial_index": 14,
+    "flash_time_video_ms": 28560.000000000004,
+    "frame_index": 713,
+    "video_time_ms": 28520.000000000004,
+    "actual_before_flash_ms": 40.0,
+    "full_detected": 1,
+    "crop_detected": 1
+  },
+  {
+    "trial_index": 14,
+    "flash_time_video_ms": 28560.000000000004,
+    "frame_index": 714,
+    "video_time_ms": 28560.000000000004,
+    "actual_before_flash_ms": 0.0,
+    "full_detected": 1,
+    "crop_detected": 1
+  },
+  {
+    "trial_index": 29,
+    "flash_time_video_ms": 56360.00000000001,
+    "frame_index": 1404,
+    "video_time_ms": 56160.00000000001,
+    "actual_before_flash_ms": 200.0,
+    "full_detected": 1,
+    "crop_detected": 0
+  },
+  {
+    "trial_index": 29,
+    "flash_time_video_ms": 56360.00000000001,
+    "frame_index": 1406,
+    "video_time_ms": 56240.0,
+    "actual_before_flash_ms": 120.00000000000728,
+    "full_detected": 1,
+    "crop_detected": 0
+  },
+  {
+    "trial_index": 29,
+    "flash_time_video_ms": 56360.00000000001,
+    "frame_index": 1408,
+    "video_time_ms": 56320.00000000001,
+    "actual_before_flash_ms": 40.0,
+    "full_detected": 1,
+    "crop_detected": 0
+  },
+  {
+    "trial_index": 29,
+    "flash_time_video_ms": 56360.00000000001,
+    "frame_index": 1409,
+    "video_time_ms": 56360.00000000001,
+    "actual_before_flash_ms": 0.0,
+    "full_detected": 1,
+    "crop_detected": 0
+  }
+]

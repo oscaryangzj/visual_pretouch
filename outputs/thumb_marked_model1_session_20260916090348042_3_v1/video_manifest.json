@@ -1,0 +1,46 @@
+{
+  "session_id": "session_20260916090348042_3",
+  "purpose": "visualize cached per-frame detections; no prediction or gap filling",
+  "source_video": "/Users/oscaryang/PycharmProjects/visual_pretouch/dataset/session_20260916090348042_3/VID_20260916_170352.mp4",
+  "source_sha256": "e7f664fcc0f11d9bd5310eccda843ea004dfcf472da218da53fcc2502f8cb0b0",
+  "source_review": "/Users/oscaryang/PycharmProjects/visual_pretouch/outputs/thumb_marked_model1_session_20260916090348042_3_v1",
+  "detections": "detections.csv",
+  "detections_sha256": "a8d9e37cd609f12ee48eb970bbc044aca8133f6407b13378b1e46e28fa51d14e",
+  "config": "config.yaml",
+  "config_sha256": "7fe95984299ab909c39204b8431b9c78833754f32f84a0363bd0895307593cb5",
+  "code": "render.py",
+  "code_sha256": "f2703a52d1ea2bafaa3bd1c81b2e69bf76022b394ec572386488268dc4da431e",
+  "command": "conda run -n visual_pretouch python /Users/oscaryang/PycharmProjects/visual_pretouch/outputs/thumb_marked_model1_session_20260916090348042_3_v1/render.py",
+  "frame_count": 1869,
+  "marked_frames": 496,
+  "no_detection_frames": 1373,
+  "source_fps": 30.538228793622864,
+  "timestamps": "frame order preserved; encoded at source average FPS",
+  "audio": "original AAC stream copied",
+  "verification": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 1920,
+        "height": 1080,
+        "duration": "61.201978",
+        "nb_frames": "1869"
+      },
+      {
+        "codec_name": "aac",
+        "codec_type": "audio",
+        "duration": "61.205000",
+        "nb_frames": "2871"
+      }
+    ],
+    "format": {
+      "duration": "61.205000"
+    }
+  },
+  "source_verified_unchanged": true,
+  "output": "thumb_marked.mp4",
+  "output_sha256": "c78fafc82511326a08414d7fab9279e27c4192eb30bbc1104c9a0e26933e8022"
+}

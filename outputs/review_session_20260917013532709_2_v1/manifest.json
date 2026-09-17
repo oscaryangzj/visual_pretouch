@@ -1,0 +1,82 @@
+{
+  "session_id": "session_20260917013532709_2",
+  "purpose": "data quality review, no prediction evaluation",
+  "inputs": {
+    "DJI_20260917013501_0005_D.MP4": {
+      "bytes": 409079405,
+      "sha256": "7a222e8767e805834d5bad228367a5ac3a7f8a10479409e144b0413b445bfd84"
+    },
+    "session_20260917013532709_2_session.json": {
+      "bytes": 892,
+      "sha256": "7eb7a25591a140b81fb48e29c10307be59302b2d38bad44f700a2e36ba0882de"
+    },
+    "session_20260917013532709_2_touches.csv": {
+      "bytes": 6062,
+      "sha256": "350a906d1a597485f31e806903c1ad65b1d6ea8801a6ecc49d05e7e2e898b432"
+    }
+  },
+  "config": "config.yaml",
+  "commands": [
+    "conda run -n visual_pretouch python /Users/oscaryang/PycharmProjects/visual_pretouch/outputs/review_session_20260917013532709_2_v1/audit.py",
+    "conda run -n visual_pretouch python /Users/oscaryang/PycharmProjects/visual_pretouch/outputs/review_session_20260917013532709_2_v1/diagnose.py",
+    "conda run -n visual_pretouch python /Users/oscaryang/PycharmProjects/visual_pretouch/outputs/review_session_20260917013532709_2_v1/window_diagnostics.py",
+    "conda run -n visual_pretouch python /Users/oscaryang/PycharmProjects/visual_pretouch/outputs/review_session_20260917013532709_2_v1/inspect_actions.py"
+  ],
+  "git_commit": "6be89372761c62c67d6881cfc1eab72f2cc99c6c",
+  "git_status": "AM AGENTS.md\n M README.md\nAM docs/PROJECT_CONTEXT.md\n?? .DS_Store\n?? .idea/\n?? collect.html\n?? config.yaml\n?? data/\n?? dataset/\n?? docs/ARCHITECTURE.md\n?? docs/DATA.md\n?? docs/DECISIONS.md\n?? docs/EXPERIMENTS.md\n?? outputs/\n?? requirements.txt\n?? scripts/\n",
+  "environment": {
+    "python_prefix": "/opt/miniconda3/envs/visual_pretouch",
+    "mediapipe": "0.10.14",
+    "opencv": "4.11.0",
+    "numpy": "1.26.4"
+  },
+  "code_sha256": {
+    "audit.py": "ea28c572782473c0d62d69414f80c2da2b915cd81692e3bd9efa53c94255b781",
+    "diagnose.py": "d40e2122fb85ea17a986dd8ed2824afc0bb7fe89c969b583aeffc7e7d5770837",
+    "window_diagnostics.py": "cefe0deebde4059dc317e901452b29543f90af5ef4ebba79939a22c86a2ae27e",
+    "pipeline_snapshot.py": "311523f917d4ed76b3b8d3eac4223d17c0b73718bef8bf9bdb8b859af2c3e81f",
+    "inspect_actions.py": "cdf3ae701e572207e27291b96c98b12d2902020894ecffb434942d6f62e45346"
+  },
+  "raw_input_hashes_unchanged": {
+    "DJI_20260917013501_0005_D.MP4": true,
+    "session_20260917013532709_2_session.json": true,
+    "session_20260917013532709_2_touches.csv": true
+  },
+  "config_sha256": "ce7d1979a7aab38c18fec4078505218d6c8a749529d4614e5f9937d605efff8c",
+  "outputs": [
+    "REPORT.md",
+    "action_frames.json",
+    "action_samples.jpg",
+    "audit.py",
+    "config.yaml",
+    "contact_sheet.jpg",
+    "cropped_thumb_contact_sheet.jpg",
+    "diagnose.py",
+    "diagnostics.json",
+    "flash_timing.png",
+    "frame_00000.jpg",
+    "frame_00136.jpg",
+    "frame_00273.jpg",
+    "frame_00409.jpg",
+    "frame_00545.jpg",
+    "frame_00681.jpg",
+    "frame_00818.jpg",
+    "frame_00954.jpg",
+    "frame_01090.jpg",
+    "frame_01226.jpg",
+    "frame_01363.jpg",
+    "frame_01499.jpg",
+    "frame_diagnostics.csv",
+    "full_thumb_contact_sheet.jpg",
+    "inspect_actions.py",
+    "manifest.json",
+    "pipeline_snapshot.py",
+    "summary.json",
+    "video_probe.json",
+    "window_diagnostics.json",
+    "window_diagnostics.py"
+  ],
+  "authoritative_window_statistics": "window_diagnostics.json",
+  "report": "REPORT.md",
+  "report_sha256": "1b1adca22294ba037133abe20bea397f9c8ac3647e31c45cf555d95b1145684c"
+}

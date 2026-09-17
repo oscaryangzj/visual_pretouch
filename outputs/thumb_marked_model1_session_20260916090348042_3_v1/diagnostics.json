@@ -1,0 +1,462 @@
+{
+  "processed_frames": 1869,
+  "preview_size_px": [
+    853,
+    480
+  ],
+  "mediapipe_version": "0.10.14",
+  "hand_detected_frames": 1858,
+  "hand_detection_coverage": 0.9941144997324772,
+  "raw_handedness_counts": {
+    "Left": 1795,
+    "Right": 63
+  },
+  "detections_with_wrist_on_other_hand_side": 1843,
+  "hand_detection_is_not_verified_thumb_accuracy": true,
+  "flash_roi_mean_gray_range": [
+    25.22298472385429,
+    220.32432432432432
+  ],
+  "flash_checks": [
+    {
+      "threshold_gray": 150,
+      "count": 30,
+      "events": [
+        {
+          "frame_index": 88,
+          "video_time_ms": 2881.6000000000004,
+          "mean_gray": 188.1646063454759
+        },
+        {
+          "frame_index": 154,
+          "video_time_ms": 5042.8,
+          "mean_gray": 206.44159811985898
+        },
+        {
+          "frame_index": 202,
+          "video_time_ms": 6614.577777777778,
+          "mean_gray": 183.73405405405404
+        },
+        {
+          "frame_index": 249,
+          "video_time_ms": 8153.611111111111,
+          "mean_gray": 192.47332549941245
+        },
+        {
+          "frame_index": 293,
+          "video_time_ms": 9594.411111111112,
+          "mean_gray": 189.48808460634547
+        },
+        {
+          "frame_index": 342,
+          "video_time_ms": 11198.944444444445,
+          "mean_gray": 190.49588719153937
+        },
+        {
+          "frame_index": 412,
+          "video_time_ms": 13491.122222222224,
+          "mean_gray": 189.7691186839013
+        },
+        {
+          "frame_index": 466,
+          "video_time_ms": 15259.37777777778,
+          "mean_gray": 184.2299412455934
+        },
+        {
+          "frame_index": 521,
+          "video_time_ms": 17060.377777777776,
+          "mean_gray": 213.02157461809637
+        },
+        {
+          "frame_index": 563,
+          "video_time_ms": 18435.68888888889,
+          "mean_gray": 183.1334430082256
+        },
+        {
+          "frame_index": 614,
+          "video_time_ms": 20105.71111111111,
+          "mean_gray": 172.1168507638073
+        },
+        {
+          "frame_index": 671,
+          "video_time_ms": 21972.2,
+          "mean_gray": 170.29428907168037
+        },
+        {
+          "frame_index": 724,
+          "video_time_ms": 23707.722222222223,
+          "mean_gray": 186.4813160987074
+        },
+        {
+          "frame_index": 781,
+          "video_time_ms": 25574.21111111111,
+          "mean_gray": 185.68253819036428
+        },
+        {
+          "frame_index": 838,
+          "video_time_ms": 27440.7,
+          "mean_gray": 188.54472385428906
+        },
+        {
+          "frame_index": 965,
+          "video_time_ms": 31599.38888888889,
+          "mean_gray": 196.78519388954172
+        },
+        {
+          "frame_index": 1011,
+          "video_time_ms": 33105.677777777775,
+          "mean_gray": 192.76089306698003
+        },
+        {
+          "frame_index": 1064,
+          "video_time_ms": 34841.2,
+          "mean_gray": 210.72545240893066
+        },
+        {
+          "frame_index": 1125,
+          "video_time_ms": 36838.67777777778,
+          "mean_gray": 194.51106933019977
+        },
+        {
+          "frame_index": 1171,
+          "video_time_ms": 38344.966666666674,
+          "mean_gray": 193.53983548766158
+        },
+        {
+          "frame_index": 1218,
+          "video_time_ms": 39884.01111111111,
+          "mean_gray": 193.56451233842537
+        },
+        {
+          "frame_index": 1267,
+          "video_time_ms": 41488.544444444444,
+          "mean_gray": 204.60916568742655
+        },
+        {
+          "frame_index": 1328,
+          "video_time_ms": 43486.02222222222,
+          "mean_gray": 196.99285546415982
+        },
+        {
+          "frame_index": 1393,
+          "video_time_ms": 45614.47777777778,
+          "mean_gray": 189.29739130434783
+        },
+        {
+          "frame_index": 1457,
+          "video_time_ms": 47710.2,
+          "mean_gray": 195.0807990599295
+        },
+        {
+          "frame_index": 1532,
+          "video_time_ms": 50166.12222222223,
+          "mean_gray": 189.154312573443
+        },
+        {
+          "frame_index": 1604,
+          "video_time_ms": 52523.8,
+          "mean_gray": 206.67285546415982
+        },
+        {
+          "frame_index": 1665,
+          "video_time_ms": 54521.27777777778,
+          "mean_gray": 191.309330199765
+        },
+        {
+          "frame_index": 1726,
+          "video_time_ms": 56518.76666666667,
+          "mean_gray": 187.86806110458284
+        },
+        {
+          "frame_index": 1788,
+          "video_time_ms": 58548.988888888896,
+          "mean_gray": 193.09405405405406
+        }
+      ],
+      "median_video_minus_browser_ms": -431155.7166666667,
+      "median_absolute_residual_ms": 6.611111111094942,
+      "p90_absolute_residual_ms": 13.686666666640669,
+      "max_absolute_residual_ms": 16.161111111112405,
+      "clock_scale": 1.000103611802862,
+      "inter_flash_inter_touch_max_difference_ms": 25.666666666677884
+    },
+    {
+      "threshold_gray": 175,
+      "count": 30,
+      "events": [
+        {
+          "frame_index": 88,
+          "video_time_ms": 2881.6000000000004,
+          "mean_gray": 188.1646063454759
+        },
+        {
+          "frame_index": 154,
+          "video_time_ms": 5042.8,
+          "mean_gray": 206.44159811985898
+        },
+        {
+          "frame_index": 202,
+          "video_time_ms": 6614.577777777778,
+          "mean_gray": 183.73405405405404
+        },
+        {
+          "frame_index": 249,
+          "video_time_ms": 8153.611111111111,
+          "mean_gray": 192.47332549941245
+        },
+        {
+          "frame_index": 293,
+          "video_time_ms": 9594.411111111112,
+          "mean_gray": 189.48808460634547
+        },
+        {
+          "frame_index": 342,
+          "video_time_ms": 11198.944444444445,
+          "mean_gray": 190.49588719153937
+        },
+        {
+          "frame_index": 412,
+          "video_time_ms": 13491.122222222224,
+          "mean_gray": 189.7691186839013
+        },
+        {
+          "frame_index": 466,
+          "video_time_ms": 15259.37777777778,
+          "mean_gray": 184.2299412455934
+        },
+        {
+          "frame_index": 521,
+          "video_time_ms": 17060.377777777776,
+          "mean_gray": 213.02157461809637
+        },
+        {
+          "frame_index": 563,
+          "video_time_ms": 18435.68888888889,
+          "mean_gray": 183.1334430082256
+        },
+        {
+          "frame_index": 615,
+          "video_time_ms": 20138.455555555556,
+          "mean_gray": 205.93931844888365
+        },
+        {
+          "frame_index": 672,
+          "video_time_ms": 22004.955555555556,
+          "mean_gray": 193.008178613396
+        },
+        {
+          "frame_index": 724,
+          "video_time_ms": 23707.722222222223,
+          "mean_gray": 186.4813160987074
+        },
+        {
+          "frame_index": 781,
+          "video_time_ms": 25574.21111111111,
+          "mean_gray": 185.68253819036428
+        },
+        {
+          "frame_index": 838,
+          "video_time_ms": 27440.7,
+          "mean_gray": 188.54472385428906
+        },
+        {
+          "frame_index": 965,
+          "video_time_ms": 31599.38888888889,
+          "mean_gray": 196.78519388954172
+        },
+        {
+          "frame_index": 1011,
+          "video_time_ms": 33105.677777777775,
+          "mean_gray": 192.76089306698003
+        },
+        {
+          "frame_index": 1064,
+          "video_time_ms": 34841.2,
+          "mean_gray": 210.72545240893066
+        },
+        {
+          "frame_index": 1125,
+          "video_time_ms": 36838.67777777778,
+          "mean_gray": 194.51106933019977
+        },
+        {
+          "frame_index": 1171,
+          "video_time_ms": 38344.966666666674,
+          "mean_gray": 193.53983548766158
+        },
+        {
+          "frame_index": 1218,
+          "video_time_ms": 39884.01111111111,
+          "mean_gray": 193.56451233842537
+        },
+        {
+          "frame_index": 1267,
+          "video_time_ms": 41488.544444444444,
+          "mean_gray": 204.60916568742655
+        },
+        {
+          "frame_index": 1328,
+          "video_time_ms": 43486.02222222222,
+          "mean_gray": 196.99285546415982
+        },
+        {
+          "frame_index": 1393,
+          "video_time_ms": 45614.47777777778,
+          "mean_gray": 189.29739130434783
+        },
+        {
+          "frame_index": 1457,
+          "video_time_ms": 47710.2,
+          "mean_gray": 195.0807990599295
+        },
+        {
+          "frame_index": 1532,
+          "video_time_ms": 50166.12222222223,
+          "mean_gray": 189.154312573443
+        },
+        {
+          "frame_index": 1604,
+          "video_time_ms": 52523.8,
+          "mean_gray": 206.67285546415982
+        },
+        {
+          "frame_index": 1665,
+          "video_time_ms": 54521.27777777778,
+          "mean_gray": 191.309330199765
+        },
+        {
+          "frame_index": 1726,
+          "video_time_ms": 56518.76666666667,
+          "mean_gray": 187.86806110458284
+        },
+        {
+          "frame_index": 1788,
+          "video_time_ms": 58548.988888888896,
+          "mean_gray": 193.09405405405406
+        }
+      ],
+      "median_video_minus_browser_ms": -431154.3666666667,
+      "median_absolute_residual_ms": 7.4500000000116415,
+      "p90_absolute_residual_ms": 15.181111111090289,
+      "max_absolute_residual_ms": 26.722222222248092,
+      "clock_scale": 1.0000353110090754,
+      "inter_flash_inter_touch_max_difference_ms": 32.266666666666424
+    },
+    {
+      "threshold_gray": 200,
+      "count": 11,
+      "events": [
+        {
+          "frame_index": 89,
+          "video_time_ms": 2914.3444444444444,
+          "mean_gray": 215.7392714453584
+        },
+        {
+          "frame_index": 154,
+          "video_time_ms": 5042.8,
+          "mean_gray": 206.44159811985898
+        },
+        {
+          "frame_index": 343,
+          "video_time_ms": 11231.68888888889,
+          "mean_gray": 213.10317273795533
+        },
+        {
+          "frame_index": 467,
+          "video_time_ms": 15292.122222222224,
+          "mean_gray": 209.31952996474735
+        },
+        {
+          "frame_index": 521,
+          "video_time_ms": 17060.377777777776,
+          "mean_gray": 213.02157461809637
+        },
+        {
+          "frame_index": 564,
+          "video_time_ms": 18468.433333333334,
+          "mean_gray": 208.69739130434783
+        },
+        {
+          "frame_index": 615,
+          "video_time_ms": 20138.455555555556,
+          "mean_gray": 205.93931844888365
+        },
+        {
+          "frame_index": 725,
+          "video_time_ms": 23740.466666666667,
+          "mean_gray": 208.41076380728555
+        },
+        {
+          "frame_index": 1064,
+          "video_time_ms": 34841.2,
+          "mean_gray": 210.72545240893066
+        },
+        {
+          "frame_index": 1267,
+          "video_time_ms": 41488.544444444444,
+          "mean_gray": 204.60916568742655
+        },
+        {
+          "frame_index": 1604,
+          "video_time_ms": 52523.8,
+          "mean_gray": 206.67285546415982
+        }
+      ]
+    },
+    {
+      "threshold_gray": 225,
+      "count": 0,
+      "events": []
+    },
+    {
+      "threshold_gray": 245,
+      "count": 0,
+      "events": []
+    }
+  ],
+  "screen_motion_samples": [
+    {
+      "frame_index": 0,
+      "center_shift_preview_px": [
+        0.0,
+        0.0
+      ],
+      "center_shift_native_px": [
+        0.0,
+        0.0
+      ],
+      "max_corner_displacement_under_first_frame_mapping_normalized": 4.4363302966840697e-16,
+      "area_ratio_to_first_frame": 1.0
+    },
+    {
+      "frame_index": 1019,
+      "center_shift_preview_px": [
+        11.25,
+        -52.0
+      ],
+      "center_shift_native_px": [
+        25.3125,
+        -117.0
+      ],
+      "max_corner_displacement_under_first_frame_mapping_normalized": 0.25261802179000215,
+      "area_ratio_to_first_frame": 1.0876803551609322
+    },
+    {
+      "frame_index": 1868,
+      "center_shift_preview_px": [
+        -3.0,
+        -68.25
+      ],
+      "center_shift_native_px": [
+        -6.75,
+        -153.5625
+      ],
+      "max_corner_displacement_under_first_frame_mapping_normalized": 0.2828277124956082,
+      "area_ratio_to_first_frame": 1.137784939810467
+    }
+  ],
+  "motion_corners_are_approximate_visible_screen_boundary_not_viewport_calibration": true,
+  "operation_area_height_fraction_of_reported_screen": 0.9456790876977238,
+  "height_mm_if_uniform_scale_and_full_screen_height": 147.71507349838444,
+  "no_prediction_accuracy_reported": true
+}

@@ -1,0 +1,28 @@
+{
+  "session_id": "session_20260916090348042_3",
+  "purpose": "same crop/settings, model_complexity 1 diagnostic",
+  "inputs": {
+    "VID_20260916_170352.mp4": {
+      "sha256": "e7f664fcc0f11d9bd5310eccda843ea004dfcf472da218da53fcc2502f8cb0b0",
+      "bytes": 125289835
+    },
+    "session_20260916090348042_3_session.json": {
+      "sha256": "3f2da020f2c86ae324de3247d076a9a80f7395483bcd56125c085b89c6530122",
+      "bytes": 878
+    },
+    "session_20260916090348042_3_touches.csv": {
+      "sha256": "64acf5658b300ba2f3969299503dac66d62af835517683fb76bc52edac6a21d2",
+      "bytes": 6062
+    }
+  },
+  "source_review": "/Users/oscaryang/PycharmProjects/visual_pretouch/outputs/review_session_20260916090348042_3_v1",
+  "config": "config.yaml",
+  "config_sha256": "7fe95984299ab909c39204b8431b9c78833754f32f84a0363bd0895307593cb5",
+  "code": "diagnose_crop.py",
+  "outputs": [
+    "cropped_hand_diagnostics.csv",
+    "cropped_hand_summary.json",
+    "cropped_thumb_contact_sheet.jpg"
+  ],
+  "command": "conda run -n visual_pretouch python /Users/oscaryang/PycharmProjects/visual_pretouch/outputs/thumb_marked_model1_session_20260916090348042_3_v1/diagnose_crop.py"
+}

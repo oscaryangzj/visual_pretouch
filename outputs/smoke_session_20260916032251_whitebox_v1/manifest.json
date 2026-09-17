@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "experiment_id": "smoke_session_20260916032251_whitebox_v1",
+  "session_ids": [
+    "session_20260916032251"
+  ],
+  "processing_id": "offline_p0",
+  "inputs": {
+    "data/derived/session_20260916032251/smoke_whitebox_v1/config.yaml": {
+      "sha256": "6f6b0ee1368b3c1877a51209a763d03fb1cf2aa64b0caadbdb4de404471d1798",
+      "bytes": 829
+    },
+    "data/derived/session_20260916032251/smoke_whitebox_v1/predictions.csv": {
+      "sha256": "add74aa432ba9acab53a6ca8b4f207af4c30aa5353abdce0e4ea01ee045b5536",
+      "bytes": 51213
+    },
+    "dataset/session_20260916032251/session_20260916032251_touches.csv": {
+      "sha256": "14cf2a7f9168e1db8d40edbde18a714487e4237668b492632b6083ac6bb4d151",
+      "bytes": 5297
+    },
+    "data/derived/session_20260916032251/smoke_whitebox_v1/alignment.csv": {
+      "sha256": "b4b59e014124f60249b4547623c7e56640ead5af72af9da204b9947893b90e2d",
+      "bytes": 3216
+    }
+  },
+  "config_path": "config.yaml",
+  "git_commit": "6be89372761c62c67d6881cfc1eab72f2cc99c6c",
+  "git_dirty": true,
+  "command": "scripts/visual_pretouch.py evaluate --config data/derived/session_20260916032251/smoke_whitebox_v1/config.yaml --predictions data/derived/session_20260916032251/smoke_whitebox_v1/predictions.csv --touches dataset/session_20260916032251/session_20260916032251_touches.csv --alignment data/derived/session_20260916032251/smoke_whitebox_v1/alignment.csv --output outputs/smoke_session_20260916032251_whitebox_v1",
+  "versions": {
+    "python": "3.11.16",
+    "numpy": "1.26.4",
+    "opencv": "4.11.0",
+    "pyyaml": "6.0.3",
+    "mediapipe": "0.10.14"
+  },
+  "config": {
+    "schema_version": 1,
+    "device": {
+      "model": "Huawei Pura X",
+      "screen_width_px": 1320,
+      "screen_height_px": 2120
+    },
+    "task": {
+      "hand": "left",
+      "crossing_direction": "left_to_right",
+      "centerline_u": 0.5,
+      "target_side": "right"
+    },
+    "tracking": {
+      "max_num_hands": 1,
+      "model_complexity": 0,
+      "min_detection_confidence": 0.5,
+      "min_tracking_confidence": 0.5,
+      "max_gap_ms": 100
+    },
+    "alignment": {
+      "flash_threshold_gray": 150,
+      "flash_rise_threshold_gray": 20,
+      "flash_after_touch_delay_ms": 0,
+      "uncertainty_ms": 50
+    },
+    "prediction": {
+      "crossing_margin_u": 0.0,
+      "reset_gap_ms": 300,
+      "linear_history_ms": 100,
+      "linear_horizon_ms": 100,
+      "linear_min_points": 3
+    },
+    "evaluation": {
+      "region_width_mm": null,
+      "region_height_mm": null,
+      "hit_radii_mm": [
+        10,
+        20,
+        30
+      ],
+      "lead_times_ms": [
+        50,
+        100,
+        150,
+        200
+      ]
+    },
+    "render": {
+      "trajectory_tail": 18
+    },
+    "collection": {
+      "trial_count": 40,
+      "inter_trial_delay_ms": 250,
+      "flash_duration_ms": 80
+    }
+  }
+}
