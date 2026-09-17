@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>点击审核</title>
+<style>
+  :root { color-scheme: light; font: 15px/1.5 system-ui, sans-serif; color: #202936; background: #f4f6f9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; }
+  main { margin: auto; }
+  header, .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 24px; margin: 0; }
+  p { margin: 6px 0; }
+  .muted { color: #697585; font-size: 13px; }
+  .panel { background: white; border: 1px solid #e1e6ed; border-radius: 14px; padding: 16px; margin-top: 16px; }
+  #trials { display: grid; grid-template-columns: repeat(auto-fit, minmax(45px, 1fr)); gap: 7px; margin-top: 10px; }
+  button, select { font: inherit; border: 1px solid #d6dde6; border-radius: 8px; background: white; color: inherit; padding: 8px 13px; cursor: pointer; }
+  button:hover { background: #eef2f7; }
+  button:disabled { opacity: .45; cursor: wait; }
+  #trials button { padding: 8px 0; }
+  #trials .keep { background: #e7f6ed; color: #17673c; }
+  #trials .drop { background: #fbecec; color: #a43333; }
+  #trials .active { outline: 2px solid #446be3; outline-offset: 1px; }
+  #status { font-weight: 600; }
+  .stage { position: relative; background: #10151d; margin-top: 12px; line-height: 0; }
+  video { display: block; width: 100%; }
+  #overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .stage:fullscreen { display: grid; align-items: center; }
+  .stage:fullscreen video { height: 100%; object-fit: contain; }
+  .stage:fullscreen #overlay { height: 100%; object-fit: contain; }
+  #seek { width: 100%; margin: 12px 0 0; accent-color: #446be3; }
+  #timeline { width: 100%; height: 14px; display: block; margin-bottom: 8px; }
+  .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .decisions { margin-top: 14px; }
+  #keep { background: #207e50; border-color: #207e50; color: white; padding: 11px 26px; }
+  #drop { background: #b84848; border-color: #b84848; color: white; padding: 11px 26px; }
+  #message { min-height: 22px; color: #52647b; overflow-wrap: anywhere; }
+  .error { color: #b32c2c !important; }
+  @media (max-width: 600px) { body { padding: 10px; } .panel { padding: 12px; } }
+</style>
+<main>
+  <header><div><h1>点击审核</h1><p id="session" class="muted">正在加载 session…</p></div><strong id="progress"></strong></header>
+  <p id="model" class="muted"></p>
+  <div class="panel">
+    <div class="row"><strong>点击列表</strong><span class="muted">绿色：保留 · 红色：舍弃 · 白色：未审核</span></div>
+    <div id="trials"></div>
+  </div>
+  <div class="panel">
+    <div class="row"><strong id="touch"></strong><span id="status"></span></div>
+    <div class="stage" id="stage"><video id="video" preload="metadata" playsinline muted></video><canvas id="overlay"></canvas></div>
+    <input id="seek" type="range" step="0.001" aria-label="片段时间">
+    <canvas id="timeline" aria-label="绿色为检出帧，红色为漏检帧，黄色为白闪"></canvas>
+    <div class="row">
+      <div class="controls">
+        <button id="play">播放</button><button id="replay">重播</button>
+        <button id="backframe" title="左方向键">前一帧</button><button id="nextframe" title="右方向键">后一帧</button>
+        <select id="rate" aria-label="播放速度"><option value="1">正常速度</option><option value="slow">慢速</option></select>
+        <button id="expand">扩大时间窗口</button><button id="fullscreen">放大查看</button>
+        <select id="tracksource" aria-label="追踪来源"><option value="continuous">连续追踪</option><option value="raw">MediaPipe 原始点</option></select>
+      </div><span id="time" class="muted"></span>
+    </div>
+    <p id="tracking" class="muted"></p>
+    <div class="row decisions"><div class="controls"><button id="keep">保留 K</button><button id="drop">舍弃 D</button><button id="clear">撤销决定</button></div>
+      <div class="controls"><button id="previous">上一次 P</button><button id="next">下一次 N</button></div></div>
+    <p id="message" role="status"></p>
+    <p class="muted">点击后立即保存并进入下一次。空格播放／暂停，左右逐帧。绿色：模型定位；蓝色：图像光流追踪；追踪丢失时不显示点。可切换原始模型结果对照。</p>
+  </div>
+  <p id="result" class="muted"></p>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  const video = $('video'), canvas = $('overlay'), ctx = canvas.getContext('2d');
+  let data, index = 0, start = 0, end = 0, expanded = false, saving = false, presentedTime = 0;
+  const labels = {'': '未审核', '1': '保留', '0': '舍弃'};
+
+  function error(text) { $('message').textContent = text; $('message').classList.add('error'); }
+  function activeTracking() { return $('tracksource').value === 'raw' && data.raw_tracking ? data.raw_tracking : data.tracking; }
+  function frameAt(time) {
+    let lo = 0, hi = data.tracking.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (data.tracking[mid][0] < time) lo = mid + 1; else hi = mid; }
+    return lo > 0 && time - data.tracking[lo - 1][0] < data.tracking[lo][0] - time ? lo - 1 : lo;
+  }
+  function refreshList() {
+    const keep = data.review.filter(r => r.keep === '1').length, drop = data.review.filter(r => r.keep === '0').length;
+    $('progress').textContent = `已审核 ${keep + drop}/${data.review.length} · 保留 ${keep} · 舍弃 ${drop}`;
+    $('trials').replaceChildren(...data.review.map((row, i) => {
+      const b = document.createElement('button'); b.textContent = i + 1;
+      b.className = `${row.keep === '1' ? 'keep' : row.keep === '0' ? 'drop' : ''} ${i === index ? 'active' : ''}`;
+      b.title = `${row.trial_id}：${labels[row.keep]}`; b.disabled = saving;
+      b.onclick = () => select(i); return b;
+    }));
+    $('touch').textContent = `第 ${index + 1} / ${data.review.length} 次点击 · ${data.review[index].trial_id}`;
+    $('status').textContent = labels[data.review[index].keep];
+  }
+  function select(i) {
+    if (saving) return;
+    index = Math.max(0, Math.min(i, data.review.length - 1));
+    video.pause();
+    start = expanded ? (index ? data.flashes[index - 1] : 0) : Math.max(0, data.flashes[index] - data.settings.before_flash_ms / 1000);
+    end = Math.min(data.duration, data.flashes[index] + data.settings.after_flash_ms / 1000);
+    $('seek').min = start; $('seek').max = end; $('seek').value = start;
+    if (video.readyState) video.currentTime = start;
+    refreshList(); drawTimeline(); ctx.clearRect(0, 0, canvas.width, canvas.height);
+    $('tracking').textContent = '加载片段…';
+  }
+  function drawTimeline() {
+    const bar = $('timeline'); bar.width = 1000; bar.height = 14; const c = bar.getContext('2d');
+    c.clearRect(0, 0, 1000, 14);
+    for (const [time, point] of activeTracking()) {
+      if (time < start || time > end) continue;
+      c.fillStyle = point ? '#37a76c' : '#d87878';
+      c.fillRect((time - start) / (end - start) * 1000, 4, Math.max(2, 1000 / ((end - start) * data.fps)), 6);
+    }
+    c.fillStyle = '#eab82d'; c.fillRect((data.flashes[index] - start) / (end - start) * 1000, 0, 3, 14);
+  }
+  function draw(time) {
+    const track = activeTracking(), f = frameAt(time), point = track[f][1];
+    const source = $('tracksource').value === 'raw' ? (point ? 'mediapipe' : 'missing') : data.tracking_status?.[f];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineWidth = Math.max(3, canvas.width / 800); ctx.strokeStyle = '#ffc84b';
+    for (let i = Math.max(1, f - data.settings.trace_tail); i <= f; i++) {
+      const a = track[i - 1], b = track[i];
+      if (!a[1] || !b[1] || a[0] < start) continue;
+      ctx.beginPath(); ctx.moveTo(...a[1]); ctx.lineTo(...b[1]); ctx.stroke();
+    }
+    if (point) { ctx.strokeStyle = source === 'optical_flow' ? '#42dfff' : '#42ef8a'; ctx.beginPath(); ctx.arc(...point, Math.max(9, canvas.width / 180), 0, 2 * Math.PI); ctx.stroke(); }
+    $('seek').value = time;
+    const relative = (time - data.flashes[index]) * 1000;
+    $('time').textContent = `${time.toFixed(2)} s · 距白闪 ${relative >= 0 ? '+' : ''}${relative.toFixed(0)} ms`;
+    $('tracking').textContent = `帧 ${f} · ${point ? (source === 'optical_flow' ? '图像光流追踪' : '模型定位') : '指尖追踪丢失'} · 当前片段 ${start.toFixed(2)}–${end.toFixed(2)} s`;
+    if (!video.paused && time >= end - 0.5 / data.fps) video.pause();
+  }
+  async function decide(keep) {
+    if (!data || saving) return;
+    saving = true; video.pause();
+    $('message').classList.remove('error'); $('message').textContent = '正在保存…';
+    for (const b of document.querySelectorAll('button')) b.disabled = true;
+    try {
+      const response = await fetch('/api/review', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({index, keep})});
+      if (!response.ok) throw new Error(await response.text());
+      data.review = await response.json(); saving = false;
+      if (keep !== '' && index < data.review.length - 1) select(index + 1); else refreshList();
+      $('message').textContent = data.review.every(r => r.keep !== '') ? '全部审核完成，已保存到 session 的 review.csv。可直接关闭页面。' : '已保存到 session 的 review.csv';
+    } catch (e) { error(`保存失败，当前决定没有保存：${e.message}`); }
+    finally { saving = false; for (const b of document.querySelectorAll('button')) b.disabled = false; refreshList(); }
+  }
+  function togglePlay() { if (video.paused) { if (video.currentTime >= end - 0.5 / data.fps) video.currentTime = start; video.play().catch(e => error(e.message)); } else video.pause(); }
+  function step(delta) { video.pause(); const f = Math.max(0, Math.min(data.tracking.length - 1, frameAt(video.currentTime) + delta)); video.currentTime = Math.max(start, Math.min(end, data.tracking[f][0])); }
+  $('play').onclick = togglePlay;
+  $('replay').onclick = () => { video.currentTime = start; video.play().catch(e => error(e.message)); };
+  $('backframe').onclick = () => step(-1); $('nextframe').onclick = () => step(1);
+  $('rate').onchange = () => video.playbackRate = $('rate').value === 'slow' ? 1 / data.settings.slow_playback_multiplier : 1;
+  $('expand').onclick = () => { expanded = !expanded; $('expand').textContent = expanded ? '恢复默认窗口' : '扩大时间窗口'; select(index); };
+  $('fullscreen').onclick = () => $('stage').requestFullscreen().catch(e => error(e.message));
+  $('keep').onclick = () => decide('1'); $('drop').onclick = () => decide('0'); $('clear').onclick = () => decide('');
+  $('previous').onclick = () => select(index - 1); $('next').onclick = () => select(index + 1);
+  $('seek').oninput = () => { video.pause(); video.currentTime = Number($('seek').value); };
+  video.onplay = () => $('play').textContent = '暂停'; video.onpause = () => $('play').textContent = '播放';
+  $('tracksource').onchange = () => { drawTimeline(); draw(presentedTime); };
+  video.onseeked = () => { if (!video.requestVideoFrameCallback) { presentedTime = video.currentTime; draw(presentedTime); } };
+  video.onerror = () => error('浏览器无法播放原始视频。HEVC 视频请尝试 macOS Safari 或支持 HEVC 的 Chrome。');
+  document.addEventListener('keydown', e => {
+    if (!data || saving || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+    const key = e.key.toLowerCase();
+    const actions = {' ': togglePlay, arrowleft: () => step(-1), arrowright: () => step(1), k: () => decide('1'), d: () => decide('0'), p: () => select(index - 1), n: () => select(index + 1), r: () => $('replay').click()};
+    if (actions[key]) { e.preventDefault(); actions[key](); }
+  });
+  async function init() {
+    try {
+      const response = await fetch('/api/session'); if (!response.ok) throw new Error(await response.text());
+      data = await response.json();
+      document.querySelector('main').style.maxWidth = `${data.settings.display_max_width_px}px`;
+      canvas.width = data.width; canvas.height = data.height;
+      $('session').textContent = data.session; $('result').textContent = `审核结果：${data.result_path}`;
+      const info = data.tracking_info;
+      $('model').textContent = info.model === 'external' ? '追踪来源：手动指定的 CSV' :
+        `MediaPipe ${info.mediapipe} · ${info.model === 'full' ? '完整版' : '轻量版'}${info.continuity ? ' · 连续追踪' : ''}`;
+      if (!data.raw_tracking) $('tracksource').disabled = true;
+      const pending = data.review.findIndex(r => r.keep === ''); index = pending < 0 ? 0 : pending;
+      video.onloadedmetadata = () => {
+        if (video.videoWidth !== data.width || video.videoHeight !== data.height) { error('视频显示尺寸与追踪坐标不一致，请核查视频方向和追踪来源。'); return; }
+        select(index);
+      };
+      video.src = '/video'; select(index);
+      if (video.requestVideoFrameCallback) {
+        const render = (_, meta) => { presentedTime = meta.mediaTime; draw(presentedTime); video.requestVideoFrameCallback(render); };
+        video.requestVideoFrameCallback(render);
+      } else video.ontimeupdate = () => { presentedTime = video.currentTime; draw(presentedTime); };
+    } catch (e) { error(`加载失败：${e.message}`); }
+  }
+  init();
+</script>
+</html>

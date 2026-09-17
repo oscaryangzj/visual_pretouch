@@ -1,0 +1,24 @@
+{
+  "session": "dataset/session_20260917061628606_7",
+  "inputs": {
+    "schema_version": 1,
+    "video_sha256": "5c86a1c141a2d152cf15e66a824da24a73117c79dcb9a9f952045733fd7d38a8",
+    "touches_sha256": "c671b51f2aa3952dedd0a29758098da6866d70c5ffd1f0f79fd40d3f48072965",
+    "mediapipe": "0.10.14",
+    "tracking": {
+      "max_num_hands": 1,
+      "model_complexity": 0,
+      "min_detection_confidence": 0.5,
+      "min_tracking_confidence": 0.5,
+      "max_gap_ms": 100
+    },
+    "input_height_px": 480
+  },
+  "git_commit": "b74f94ab73589e6e0d14a811eb80f39928d4e12f",
+  "git_dirty": true,
+  "snapshot": "reproduce.py",
+  "config": "config.yaml",
+  "mediapipe": "0.10.14",
+  "cached_reproduction_max_error_px": 0.0,
+  "scope": "frames 0..1440 processed sequentially; results 1350..1440; visual audit of seven sampled frames, not whole-session accuracy"
+}

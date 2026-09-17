@@ -1,0 +1,36 @@
+session_dir: dataset/session_20260917061628606_7
+last_frame: 1440
+record_from_frame: 1350
+capture_frames:
+- 1380
+- 1390
+- 1395
+- 1396
+- 1400
+- 1405
+- 1410
+modes:
+  lite480:
+  - 0
+  - false
+  - 480
+  full480:
+  - 1
+  - false
+  - 480
+  static480:
+  - 0
+  - true
+  - 480
+  lite1080:
+  - 0
+  - false
+  - 1080
+min_detection_confidence: 0.5
+min_tracking_confidence: 0.5
+max_num_hands: 1
+display_crop_xyxy:
+- 530
+- 300
+- 1130
+- 1020

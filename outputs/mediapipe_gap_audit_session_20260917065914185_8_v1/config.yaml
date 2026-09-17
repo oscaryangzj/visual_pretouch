@@ -32,9 +32,8 @@ task:
 tracking:
   max_num_hands: 1
   model_complexity: 1  # MediaPipe Hands 完整模型；0 为轻量模型。
-  # 握持场景同时放宽手掌检测和关键点接受门槛；由连续追踪拒绝跳点。
-  min_detection_confidence: 0.2
-  min_tracking_confidence: 0.2
+  min_detection_confidence: 0.5
+  min_tracking_confidence: 0.5
   max_gap_ms: 100
   continuity:
     enabled: true
