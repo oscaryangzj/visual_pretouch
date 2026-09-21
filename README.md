@@ -56,15 +56,21 @@ M2 保持 P0 的首次左→右跨线预测时刻和固定数据划分，比较�
 3. 根据重复结果判断是否进入 M3 的时序模型探索。
 4. 继续保持每次运行的输入、配置、git commit 和输出目录可追溯。
 
-复现当前 M2 后 10 次 demo 的入口如下；输出目录必须不存在：
+M2 入口会自动读取 `config.yaml:data_split.test_sessions` 中唯一的测试 session；不传 `--last-n` 时评估该 session 的全部 touch。输出目录默认自动生成，不会覆盖已有结果，名称格式为 `outputs/m2_direct_endpoint_v1_<YYYYMMDDHHMMSS>/`。复现后 10 次 demo 可运行：
 
 ```bash
 conda activate visual_pretouch
 python scripts/m2_endpoint_models.py \
-  --test-session dataset/session_20260917075240834_5 \
-  --last-n 10 \
-  --output outputs/m2_direct_endpoint_v1_session_20260917075240834_5_last10
+  --last-n 10
 ```
+
+运行完整测试 session：
+
+```bash
+python scripts/m2_endpoint_models.py
+```
+
+如需固定输出目录，可继续传入 `--output outputs/<experiment_name>`；该目录必须不存在。
 
 ## 上一 milestone：M1 最小闭环（流程已跑通，待有效数据验证）
 

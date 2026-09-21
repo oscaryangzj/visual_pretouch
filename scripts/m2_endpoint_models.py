@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from itertools import product
 import math
 from pathlib import Path
@@ -34,6 +35,7 @@ TITLES = {
     METHODS[1]: 'M2-A | Ridge direct endpoint',
     METHODS[2]: 'M2-B | Gradient Boosting direct endpoint',
 }
+EXPERIMENT_NAME = 'm2_direct_endpoint_v1'
 
 
 def feature_names(cfg):
@@ -251,31 +253,50 @@ def predict_sample(sample, median_delta, models, names):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--test-session', type=Path, required=True)
-    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--output', type=Path,
+                        help='Output directory; defaults to outputs/<version>_<timestamp>')
     parser.add_argument('--config', type=Path, default=ROOT / 'config.yaml')
     parser.add_argument('--training-root', type=Path, default=ROOT / 'dataset')
-    parser.add_argument('--last-n', type=int, help='Evaluate and render only the final N test touches')
+    parser.add_argument('--last-n', type=int,
+                        help='Evaluate and render only the final N test touches; default: all touches')
+    parser.add_argument('--test-session', help='Override the test session for this run')
+    parser.add_argument('--no-render', action='store_true', help='Save predictions and metrics without rendering videos')
     args = parser.parse_args()
 
     cfg = pipeline.load_yaml(args.config)
     pipeline.validate_p0_task(cfg['task'])
     split = cfg['data_split']
-    train_names = list(split['training_sessions'])
-    test_names = list(split['test_sessions'])
+    configured_train_names = list(split['training_sessions'])
+    configured_test_names = list(split['test_sessions'])
+    if len(configured_test_names) != 1:
+        raise ValueError('M2 requires exactly one session in data_split.test_sessions; target selection is automatic')
+    test_name = args.test_session or configured_test_names[0]
+    all_session_names = list(dict.fromkeys(configured_train_names + configured_test_names))
+    if test_name not in all_session_names:
+        raise ValueError(f'unknown --test-session: {test_name}')
+    if args.test_session:
+        train_names = [name for name in all_session_names if name != test_name]
+        run_split = dict(split, training_sessions=train_names, test_sessions=[test_name])
+    else:
+        train_names = configured_train_names
+        run_split = split
     if split.get('validation_sessions'):
         raise ValueError('M2 currently requires validation_sessions to be empty; model selection uses grouped training CV')
-    if args.test_session.name not in test_names:
-        raise ValueError(f'target session {args.test_session.name} is not in data_split.test_sessions')
-    if set(train_names) & set(test_names):
+    if set(train_names) & {test_name}:
         raise ValueError('training_sessions and test_sessions overlap')
+    if args.last_n is not None and args.last_n <= 0:
+        raise ValueError('--last-n must be positive')
+
+    target_session = (args.training_root / test_name).resolve()
+    output = args.output or ROOT / 'outputs' / f'{EXPERIMENT_NAME}_{datetime.now().strftime("%Y%m%d%H%M%S")}'
 
     print('Preparing reviewed training sessions ...', flush=True)
     training_data = [baseline_demo.prepare_session((args.training_root / name).resolve(), cfg) for name in train_names]
-    target = baseline_demo.prepare_session(args.test_session.resolve(), cfg)
-    selected_trials = target['trials'][-args.last_n:] if args.last_n else target['trials']
-    if not selected_trials or (args.last_n is not None and args.last_n <= 0):
-        raise ValueError('--last-n must be positive and within the test touch count')
+    target = baseline_demo.prepare_session(target_session, cfg)
+    selected_trials = target['trials'] if args.last_n is None else target['trials'][-args.last_n:]
+    if not selected_trials or (args.last_n is not None and args.last_n > len(target['trials'])):
+        test_touch_count = len(target['trials'])
+        raise ValueError(f'--last-n must be within the test touch count ({test_touch_count})')
 
     all_train_samples = [sample for data in training_data for sample in prepare_samples(data, cfg, 'train')]
     train_samples = [sample for sample in all_train_samples if sample['eligible']]
@@ -296,45 +317,46 @@ def main():
     _, device_cfg = pipeline.evaluation_device(cfg, pipeline.read_csv(target['touches_path']))
     details, metrics = baseline_demo.evaluate(rows, selected_trials, device_cfg, cfg['evaluation'], 'test', METHODS)
 
-    pipeline.ensure_new(args.output)
-    model_dir = args.output / 'models'
+    pipeline.ensure_new(output)
+    model_dir = output / 'models'
     model_dir.mkdir()
     joblib.dump(ridge, model_dir / 'model_a_ridge.joblib')
     joblib.dump(boosting, model_dir / 'model_b_gradient_boosting.joblib')
     pipeline.write_json(model_dir / 'median_delta.json', {'method': METHODS[0], 'delta_u': float(median_delta[0]),
                                                          'delta_v': float(median_delta[1]),
                                                          'training_samples': len(train_samples)})
-    pipeline.write_json(args.output / 'feature_schema.json', {'schema_version': 1, 'features': names,
+    pipeline.write_json(output / 'feature_schema.json', {'schema_version': 1, 'features': names,
         'target': ['touch_u - crossing_u', 'touch_v - crossing_v'],
         'causal_cutoff': 'first valid left-to-right centerline crossing',
         'missing_values': 'training-only median imputation with missing indicators'})
-    pipeline.write_json(args.output / 'model_selection.json', {'schema_version': 1,
+    pipeline.write_json(output / 'model_selection.json', {'schema_version': 1,
         'ridge': ridge_selection, 'gradient_boosting': boosting_selection})
-    pipeline.write_json(args.output / 'metrics.json', metrics)
+    pipeline.write_json(output / 'metrics.json', metrics)
     sample_rows = all_train_samples + test_samples
     sample_fields = [key for key in sample_rows[0] if not key.startswith('_')]
-    pipeline.write_csv(args.output / 'samples.csv', sample_rows, sample_fields)
-    pipeline.write_csv(args.output / 'predictions.csv', details, list(details[0]))
-    pipeline.write_csv(args.output / 'trajectory.csv', target['projected_trajectory'], list(target['projected_trajectory'][0]))
-    pipeline.write_json(args.output / 'calibration.json', target['state']['calibration'])
-    shutil.copy2(args.config, args.output / 'config.yaml')
+    pipeline.write_csv(output / 'samples.csv', sample_rows, sample_fields)
+    pipeline.write_csv(output / 'predictions.csv', details, list(details[0]))
+    pipeline.write_csv(output / 'trajectory.csv', target['projected_trajectory'], list(target['projected_trajectory'][0]))
+    pipeline.write_json(output / 'calibration.json', target['state']['calibration'])
+    shutil.copy2(args.config, output / 'config.yaml')
 
     videos = []
-    for method in METHODS:
-        print(f'Rendering {method} ...', flush=True)
-        videos.append(baseline_demo.render(target, selected_trials, details, method,
-                                           args.output / f'demo_{method}.mp4', cfg['render'], TITLES[method]))
+    if not args.no_render:
+        for method in METHODS:
+            print(f'Rendering {method} ...', flush=True)
+            videos.append(baseline_demo.render(target, selected_trials, details, method,
+                                               output / f'demo_{method}.mp4', cfg['render'], TITLES[method]))
     commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
     patch = subprocess.run(['git', 'diff', 'HEAD'], cwd=ROOT, check=True, capture_output=True, text=True).stdout
-    (args.output / 'code.patch').write_text(patch, encoding='utf-8')
-    shutil.copy2(Path(__file__), args.output / Path(__file__).name)
-    pipeline.write_json(args.output / 'manifest.json', {'schema_version': 1, 'experiment': 'm2_direct_endpoint_v1',
+    (output / 'code.patch').write_text(patch, encoding='utf-8')
+    shutil.copy2(Path(__file__), output / Path(__file__).name)
+    pipeline.write_json(output / 'manifest.json', {'schema_version': 1, 'experiment': EXPERIMENT_NAME,
         'git_commit': commit, 'git_dirty': bool(patch), 'command': sys.argv,
-        'data_split': split, 'selected_test_trials': [trial['trial_id'] for trial in selected_trials],
+        'data_split': run_split, 'selected_test_trials': [trial['trial_id'] for trial in selected_trials],
         'training_sources': {data['session'].name: baseline_demo.source_identity(data) for data in training_data},
         'test_source': baseline_demo.source_identity(target), 'device': device_cfg, 'videos': videos,
         'python': sys.version, 'opencv': cv2.__version__, 'numpy': np.__version__})
-    print(f'Saved M2 predictions and {len(videos)} videos to {args.output}')
+    print(f'Saved M2 predictions and metrics to {output}' + (f' ({len(videos)} videos)' if videos else ' (no videos)'))
 
 
 if __name__ == '__main__':

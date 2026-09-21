@@ -351,6 +351,20 @@ v4 仍是训练集上的开发 demo：系数和时间中位数都使用包含展
 
 输出位于 `outputs/m2_direct_endpoint_v1_session_20260917075240834_5_last10_v10/`。抽检 Gradient Boosting 的跨线后画面，HUD 未遮挡手机，手机轮廓、中线、平滑轨迹、当前拇指和预测点层级清楚。渐隐轨迹使用局部图像区域混合，避免逐段复制整张视频帧。三段视频及量化结果与 v5 使用相同输入和预测。
 
+### M2 全 session leave-one-out 量化 · 2026-09-21 · 完成
+
+使用 `scripts/m2_all_sessions.py` 对 `config.yaml:data_split` 中的 10 个 session 逐一测试。每轮将当前 session 作为测试集，其余 9 个 session 作为训练集；每轮重新拟合增量中位数、Ridge 和 Gradient Boosting。运行使用 `--no-render`，只保存模型、预测、指标和汇总 CSV，不生成视频。每个 session 使用全部保留 touch；未检测到有效跨线的试次保留在分母中并记录失败原因。
+
+输出位于 `outputs/m2_leave_one_session_out_v2/`，总表为 `summary.csv`。跨 session 的宏平均结果如下，百分比是各 session 指标的简单平均，不是按 touch 数加权：
+
+| 方法 | mean mm | median mm | hit@10 | hit@15 | hit@20 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| M2 median delta | 15.00 | 12.83 | 34.9% | 58.6% | 74.1% |
+| M2 Model A Ridge | 11.58 | 10.11 | 50.5% | 74.5% | 88.8% |
+| M2 Model B Gradient Boosting | 11.28 | 9.77 | 50.6% | 77.4% | 88.9% |
+
+这是按 session 留一法得到的开发集泛化参考；10 个 session 来自同一用户和相近采集条件，不能当作跨用户或跨设备结论。各 session 的有效 touch 数、失败数和完整指标以 `summary.csv` 及各子目录的 `metrics.json` 为准。
+
 结论与限制：在这 10 个测试 touch 上，两个学习方法都优于增量中位数，Gradient Boosting 的中位误差最低；这是一个有希望的初步结果。样本量只有 10 个展示 touch，且所有数据来自同一用户和当前采集条件，不能据此宣称跨用户、跨设备或完整测试集泛化。下一步先跑完整 `_5` 测试集和更多独立 session，再决定是否进入 M3 时序模型。
 
 每次运行追加以下记录；数据和大文件通过路径引用，不粘贴进本文。

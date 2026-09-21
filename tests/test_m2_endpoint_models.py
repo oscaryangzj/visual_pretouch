@@ -92,7 +92,6 @@ class M2EndpointTests(unittest.TestCase):
         self.assertTrue(train)
         self.assertTrue(test)
         self.assertTrue(train.isdisjoint(test))
-        self.assertNotIn('session_20260917075240834_5', train)
 
 
 if __name__ == '__main__':

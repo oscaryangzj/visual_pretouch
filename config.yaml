@@ -35,10 +35,10 @@ data_split:
     - session_20260917074713753_4
     - session_20260917075451196_6
     - session_20260917075623831_7
-    - session_20260917075744362_8
+    - session_20260917075240834_5
   validation_sessions: []
   test_sessions:
-    - session_20260917075240834_5
+    - session_20260917075744362_8
 
 task:
   hand: left
