@@ -24,7 +24,7 @@ P0 代码已实现，范围限定为左手拇指从左向右跨越中线并预�
 
 后续 `_8` 会话暴露了长段无法重新定位的问题。当前手掌检测与关键点接受门槛同时设为 0.2，保留完整版和光流检查；该组完全无追踪的点击窗口由 12/30 减至 1/30，但仍有长段缺失，不能视为已全面解决。对照和限制见 [漏检诊断](outputs/mediapipe_gap_audit_session_20260917065914185_8_v1/REPORT.md)。
 
-当前 demo 指定会话为 `session_20260917075240834_5`，全部 30 次审核已完成且保留；使用后 10 次触摸（`trial_0020`–`trial_0029`）生成三 baseline 视频。训练统计扫描所有审核完成、四角已标注且缓存有效的 session；未完成四角标注的 session 记录跳过原因。v4 使用跨线前最多 100 ms 的局部速度，并让 B2/B3 共用 `velocity_scale=0.1` 近似后续减速；B2 后 10 次无边界裁剪。视频以 `render.playback_rate=0.5` 输出。此前 `session_20260917075744362_8` 的 28 次保留、2 次舍弃结果仍保存在原 session。
+当前白盒 baseline 的数据划分写在 `config.yaml:data_split`：`session_20260917075240834_5` 为测试集，其余 9 个已完成标注的 session 为训练集，验证集为空。此前 `session_20260917075744362_8` 的 28 次保留、2 次舍弃结果仍保存在原 session。
 
 ## 文档导航
 
@@ -57,23 +57,30 @@ M1 验证流程是否可信；P0 仍需完成有效数据上的多提前时间�
 
 ### 三 baseline demo（代码与真实会话视频已生成）
 
-本轮方法为 B1 跨线投影、B2 统计时间线性外推、B3 真实时间线性外推。当前基本所有 session 作为训练集，B2 中位数从符合条件的已审核训练试次汇总；本次视频展示指定会话的后 10 次触摸。公式、训练数据使用规则、屏幕约束及 oracle 限制统一见 [EXPERIMENTS.md](docs/EXPERIMENTS.md#baseline)，不沿用旧 B3 Ridge 编号。
+本轮方法为 B1 跨线投影、B2 统计时间线性外推、B3 真实时间线性外推。当前按 `config.yaml:data_split` 固定训练和测试 session，B2 中位数只从训练 session 汇总；本次视频展示测试 session 的后 10 次触摸。公式、训练数据使用规则、屏幕约束及 oracle 限制统一见 [EXPERIMENTS.md](docs/EXPERIMENTS.md#baseline)，不沿用旧 B3 Ridge 编号。
 
-`scripts/baseline_demo.py` 复用审核缓存及四角文件，生成训练时间先验、三方法预测、误差明细和同一组触摸的三个视频。默认扫描 `dataset/session_*`，只有已有审核、标定及有效缓存的会话参与训练；配置 `prediction.training_sessions` 可固定清单。缺少标定的其他 session 会记录跳过原因，不复用目标 session 的四角。模块边界见 [ARCHITECTURE.md](docs/ARCHITECTURE.md#当前-demo-入口)。
+`scripts/baseline_demo.py` 复用审核缓存及四角文件，生成训练时间先验、三方法预测、误差明细和同一组触摸的三个视频。当前由 `data_split.training_sessions` 固定训练清单，测试目标必须属于 `data_split.test_sessions`，不会把测试 session 混入训练统计。模块边界见 [ARCHITECTURE.md](docs/ARCHITECTURE.md#当前-demo-入口)。
 
 验收要求：三方法同一跨线帧触发并冻结；B2 共用可追溯的训练时间先验；demo 明示训练集结果，B3 明示 oracle；最终预测点在屏幕内；实际点击后显示真实触点与误差；保留试次中的预测失败如实展示。数学边界、自动测试与真实会话抽帧核查已通过；当前仍是训练集开发 demo。
 
-复现当前 v4（输出目录必须不存在）：
+复现当前测试集 demo（输出目录必须不存在）：
 
 ```bash
 conda activate visual_pretouch
 python scripts/baseline_demo.py \
   --session-dir dataset/session_20260917075240834_5 \
   --last-n 10 \
-  --output outputs/baseline_demo_session_20260917075240834_5_last10_v4
+  --output outputs/baseline_demo_session_20260917075240834_5_last10_v7
 ```
 
 每个视频拼接后 10 次原始触摸的片段，保留失败状态；源时间窗保存在 manifest。输出包含三个 `demo_*.mp4`、`predictions.csv`、`trajectory.csv`、`metrics.json`、`time_prior.json`、标定和配置快照、代码补丁与入口快照。视频不含音轨，默认 0.5 倍速。缺少目标 session 的标定时直接提示补标，不新建结果目录。以下旧 CLI 命令仍用于历史 baseline。
+
+量化已有 baseline 输出时，传入输出目录即可。默认报告毫米平均／中位误差及 hit@10/15/20；`--format json` 或 `--format csv` 可输出机器可读结果：
+
+```bash
+python scripts/baseline_metrics.py \
+  outputs/baseline_demo_session_20260917075240834_5_last10_v4
+```
 
 ### 逐次 touch 可视化审核（已实现）
 

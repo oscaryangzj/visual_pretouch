@@ -129,7 +129,7 @@ MediaPipe 的 `min_detection_confidence` 控制手掌检测接受门槛，`min_t
 | `velocity_scale` | B2/B3 共用的速度衰减系数；B1 留空 |
 | `applied_velocity_u_per_ms`、`applied_velocity_v_per_ms` | `velocity_scale × velocity`，即实际参与外推的速度；B1 留空 |
 | `uses_oracle_time` | 方法是否使用当前试次事后触摸时间；B3 为 1，B1/B2 为 0 |
-| `split` | 数据集归属；当前 demo 为 `train`，没有会话内标定／比较分块 |
+| `split` | 数据集归属；由 `config.yaml:data_split` 固定。训练先验记录为 `train`，测试 session 的预测与指标记录为 `test` |
 | `calibration_source_trial_id`、`calibration_source_touch_index` | 本次实际使用的四角来自哪个原始 touch |
 | `calibration_inherited`、`calibration_reference_frame` | 是否沿用其他 touch 的四角、该标注的参考帧 |
 

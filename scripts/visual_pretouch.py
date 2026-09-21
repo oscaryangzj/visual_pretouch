@@ -539,7 +539,7 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
                "device_id": device_id, "device_model": device_cfg.get("model"),
                "region_width_mm": width_mm, "region_height_mm": height_mm,
                "protocol_valid_trials": len(protocol_trials), "by_prediction_mode": {}}
-    radii = [float(x) for x in ecfg.get("hit_radii_mm", [10, 20, 30])]
+    radii = [float(x) for x in ecfg.get("hit_radii_mm", [10, 15, 20, 30])]
     for method, mode in groups:
         method_rows = [r for r in details if r.get("method") == method and r.get("prediction_mode") == mode]
         good = [r for r in method_rows if r.get("valid_for_metrics") == 1]

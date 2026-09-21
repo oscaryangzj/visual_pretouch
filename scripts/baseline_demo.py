@@ -149,7 +149,7 @@ def oracle_prediction(crossing, velocity, touch_time_ms):
     return horizon, predict_position([crossing['thumb_u'], crossing['thumb_v']], velocity, horizon)
 
 
-def predict_trial(trial, prior_ms, velocity_scale=1.0):
+def predict_trial(trial, prior_ms, velocity_scale=1.0, split='train'):
     if not 0 < velocity_scale <= 1:
         raise ValueError('prediction.velocity_scale must be in (0, 1]')
     crossing, velocity = trial['crossing'], trial['velocity']
@@ -162,7 +162,7 @@ def predict_trial(trial, prior_ms, velocity_scale=1.0):
                    calibration_source_touch_index=trial.get('calibration_source_touch_index', ''),
                    calibration_inherited=trial.get('calibration_inherited', ''),
                    calibration_reference_frame=trial.get('calibration', {}).get('reference_frame_index', ''))
-        row.update(schema_version=4, method=method, prediction_mode='centerline_crossing', split='train',
+        row.update(schema_version=4, method=method, prediction_mode='centerline_crossing', split=split,
                    prediction_frame=crossing['frame_index'] if crossing else '',
                    prediction_time_ms=crossing['video_time_ms'] if crossing else '',
                    raw_pred_u='', raw_pred_v='', pred_u='', pred_v='', clipped='', horizon_ms='',
@@ -198,7 +198,7 @@ def predict_trial(trial, prior_ms, velocity_scale=1.0):
     return rows
 
 
-def evaluate(rows, trials, device_cfg, evaluation_cfg):
+def evaluate(rows, trials, device_cfg, evaluation_cfg, split='train'):
     by_key = {(t['trial_id'], t['touch_index']): t for t in trials}
     details = []
     for row in rows:
@@ -243,7 +243,7 @@ def evaluate(rows, trials, device_cfg, evaluation_cfg):
             hits = sum(v <= radius for v in values)
             summaries[method][f'hit_at_{radius}mm'] = hits / len(values) if values else None
             summaries[method][f'hit_at_{radius}mm_all_kept'] = hits / denominator if denominator and physical else None
-    return details, {'schema_version': 1, 'session_id': trials[0]['session_id'], 'split': 'train',
+    return details, {'schema_version': 1, 'session_id': trials[0]['session_id'], 'split': split,
                      'device': device_cfg, 'timing': 'approximate_flash_alignment',
                      'common_valid_trials': sorted(common), 'methods': summaries}
 
@@ -356,7 +356,14 @@ def main():
     if not 1 <= n <= len(target['trials']):
         raise ValueError('--last-n must be within the touch count')
     training, skipped = [], []
-    names = cfg['prediction']['training_sessions']
+    split = cfg.get('data_split', {})
+    names = split.get('training_sessions', cfg['prediction']['training_sessions'])
+    validation_names = split.get('validation_sessions', [])
+    test_names = split.get('test_sessions', [])
+    if validation_names:
+        raise ValueError('baseline demo currently requires an empty validation_sessions list')
+    if test_names and args.session_dir.name not in test_names:
+        raise ValueError(f"target session {args.session_dir.name} is not in data_split.test_sessions")
     sessions = [args.training_root / s for s in names] if names else sorted(args.training_root.glob('session_*'))
     for session in sessions:
         try:
@@ -367,10 +374,13 @@ def main():
     prior = fit_time_prior(training, cfg)
     prior['requested_sessions'] = [p.name for p in sessions]
     prior['skipped_sessions'] = skipped
+    prior['data_split'] = {'training_sessions': names, 'validation_sessions': validation_names,
+                           'test_sessions': test_names}
     selected = target['trials'][-n:]
-    rows = [r for t in selected for r in predict_trial(t, prior['prior_horizon_ms'], velocity_scale)]
+    target_split = 'test' if target['session'].name in test_names else 'train'
+    rows = [r for t in selected for r in predict_trial(t, prior['prior_horizon_ms'], velocity_scale, target_split)]
     _, device_cfg = pipeline.evaluation_device(cfg, pipeline.read_csv(target['touches_path']))
-    details, metrics = evaluate(rows, selected, device_cfg, cfg['evaluation'])
+    details, metrics = evaluate(rows, selected, device_cfg, cfg['evaluation'], target_split)
     pipeline.ensure_new(args.output)
     pipeline.write_json(args.output / 'calibration.json', target['state']['calibration'])
     pipeline.write_json(args.output / 'time_prior.json', prior)
@@ -391,6 +401,7 @@ def main():
     pipeline.write_json(args.output / 'manifest.json', {'schema_version': 1, 'git_commit': commit,
         'git_dirty': dirty, 'source': source_identity(target), 'device': device_cfg,
         'selected_trials': [t['trial_id'] for t in selected], 'training_time_prior': 'time_prior.json',
+        'data_split': prior['data_split'],
         'command': sys.argv, 'videos': videos, 'python': sys.version, 'opencv': cv2.__version__, 'numpy': np.__version__})
     print(f'Saved {n} touch clips per baseline to {args.output}')
 

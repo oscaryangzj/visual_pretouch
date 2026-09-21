@@ -23,6 +23,23 @@ devices:
     region_width_mm: 65.1
     region_height_mm: 141.2
 
+# 当前白盒 baseline 的固定数据划分；session 名称必须与 dataset/ 下目录一致。
+# 验证集暂不使用，避免把当前小规模数据再拆散。
+data_split:
+  training_sessions:
+    - session_20260917061628606_7
+    - session_20260917065914185_8
+    - session_20260917073608014_1
+    - session_20260917074407285_2
+    - session_20260917074536340_3
+    - session_20260917074713753_4
+    - session_20260917075451196_6
+    - session_20260917075623831_7
+    - session_20260917075744362_8
+  validation_sessions: []
+  test_sessions:
+    - session_20260917075240834_5
+
 task:
   hand: left
   crossing_direction: left_to_right
@@ -70,7 +87,7 @@ prediction:
   training_sessions: []
 
 evaluation:
-  hit_radii_mm: [10, 20, 30]
+  hit_radii_mm: [10, 15, 20, 30]
   lead_times_ms: [50, 100, 150, 200]
 
 render:

@@ -16,6 +16,7 @@
 | `scripts/visual_pretouch.py evaluate` | 关联真实触点，执行预先约定的评估 | 预测、对齐、touch CSV → 明细、指标和图表、manifest |
 | `scripts/visual_pretouch.py render` | 生成可核查的叠加视频 | 视频、标定、轨迹、预测、触点、对齐 → demo video |
 | `scripts/baseline_demo.py` | 接入已审核缓存、拟合时间先验，运行本轮三 baseline 并拼接点击片段 | 已审核 session、四角、配置 → 时间先验、预测、指标、三个视频 |
+| `scripts/baseline_metrics.py` | 从任意 baseline 预测表汇总毫米误差和命中率 | 输出目录或 `predictions.csv` → 终端表格／JSON／CSV |
 | `scripts/review_session.py`、`scripts/review_session.html` | 本地浏览器显示逐次追踪，保存保留／舍弃选择与四角标注 | session、可选已有追踪与事件 → 机器缓存、审核文件、标定文件 |
 
 历史阶段按子命令运行；本轮 demo 用独立小入口连接已审核数据，复用 `scripts/visual_pretouch.py` 的读取、投影与跨线函数。文件字段以 [DATA.md](DATA.md) 为准。
@@ -45,7 +46,7 @@ touch CSV ────────────────→ alignment ──�
 
 ### 当前 demo 入口
 
-1. 校验 session 的原始文件、已审核缓存和 `review.csv` 身份；将缓存中的连续追踪坐标投影成轨迹，不重新运行 MediaPipe。完整点击序列负责动作边界，人工选择负责本次参与的试次。
+1. 校验 session 的原始文件、已审核缓存和 `review.csv` 身份；将缓存中的连续追踪坐标投影成轨迹，不重新运行 MediaPipe。完整点击序列负责动作边界，人工选择负责本次参与的试次。`config.yaml:data_split` 固定训练、验证和测试 session，测试目标必须属于 `test_sessions`。
 2. 读取 review 中保存的实际网页操作区域标定，按原始触摸顺序解析单独标注和继承关系。当前动作全部图像坐标使用该动作同一单应变换，再检测跨线和估计速度；不将不同变换下的坐标连起来检测跨线。渲染也使用本次变换和边界。
 3. 顺序提取跨线事件及截至跨线的历史速度，再应用配置中的统一速度衰减系数。时间先验拟合模块汇总指定训练 session 中符合条件的已审核试次，输出冻结的时间先验文件；B2 预测只读取此先验。追加审核结果时通过新处理版本重拟合，不自动修改既有结果。
 4. B1/B2 和独立 B3 oracle 分支生成预测，通过同一屏幕约束函数，保存约束前后结果。数据字段由 DATA 维护，算法和分块协议由 EXPERIMENTS 维护。
