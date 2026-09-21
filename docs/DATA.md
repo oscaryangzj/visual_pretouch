@@ -137,6 +137,29 @@ MediaPipe 的 `min_detection_confidence` 控制手掌检测接受门槛，`min_t
 
 当前 demo 的 `trajectory.csv` 按动作保存投影结果，增加 `trial_id`、`touch_index` 和 `calibration_source_trial_id`，以 `(trial_id,touch_index,frame_index)` 标识一行。每个动作内使用同一映射；覆盖动作开始至点击后预览结束的源帧，缺失帧保留并标记无效。原生像素轨迹和审核缓存不改变。实验目录的 `calibration.json` 是完整四角文件快照，可核对每次使用的变换；旧 CLI 的单次 `extract` 仍只使用顶层静态映射。
 
+### M2 样本与预测数据
+
+M2 的样本单位是一次原始 touch，以 `(session_id, trial_id, touch_index)` 唯一标识。`split` 来自固定 `data_split`；训练样本仅纳入 `keep=1`、GT 有效且触摸前存在首次左→右跨线的试次。舍弃、无效 GT 和无跨线试次仍保留排除原因，测试评估不能静默删除模型失败。
+
+标签定义为 `delta_u=touch_u-crossing_u`、`delta_v=touch_v-crossing_v`。标签只用于训练或事后评估，不进入测试特征。特征的最大时间戳必须满足 `max_feature_time_ms <= prediction_time_ms`；禁止读取真实剩余触摸时间、跨线后的轨迹、当前试次目标位置或 GT。
+
+首版特征以归一化屏幕坐标计算，包括跨线位置、动作开始至跨线的时长，以及跨线前 50/100/200/300 ms 内的 u/v 最小二乘速度、u/v 位移和有效点数；另记录 300 ms 内的有效比例、最大有效点间隔、轨迹长度、直线度，以及 50 ms 与 300 ms 速度模长之差。轨迹窗口只使用不超过 `tracking.max_gap_ms` 的最近连续有效段，缺失特征保留为空值。填充值和缺失指示只能由训练 fold 或最终训练集拟合。
+
+M2 输出约定：
+
+| 文件／字段 | 语义 |
+| --- | --- |
+| `samples.csv` | 实际训练和测试样本、因果特征、标签、纳入状态、设备物理尺寸 |
+| `feature_schema.json` | 特征顺序、标签定义、因果截止点和缺失值规则 |
+| `model_selection.json` | 按 session 分组的 fold、候选参数、分数和最终参数 |
+| `models/median_delta.json` | 训练集二维增量中位数及贡献样本数 |
+| `models/*.joblib` | Model A/B 最终训练管线；只能与同一次特征 schema 和配置配套使用 |
+| `predicted_delta_u/v` | 模型输出的跨线点到落点增量 |
+| `raw_pred_u/v` | `crossing_uv + predicted_delta_uv`，允许有限越界 |
+| `pred_u/v`、`clipped` | 裁剪到 `[0,1]` 后用于主指标和视频的坐标，以及是否发生裁剪 |
+
+稳定方法标识为 `m2_median_delta`、`m2_model_a_ridge`、`m2_model_b_gradient_boosting`。M2 预测不使用 oracle 时间，`prediction_frame/time_ms` 与三种方法共用的首次跨线帧一致。
+
 ## 人工审核数据
 
 审核单位为原始 touch。保留／舍弃的唯一结果文件是 `<session>/review.csv`，与原始视频和采集文件同目录；不更改原始文件，也不创建审核输出目录。CSV 使用 UTF-8，包含全部原始点击：

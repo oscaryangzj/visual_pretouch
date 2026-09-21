@@ -26,6 +26,8 @@ P0 代码已实现，范围限定为左手拇指从左向右跨越中线并预�
 
 当前白盒 baseline 的数据划分写在 `config.yaml:data_split`：`session_20260917075240834_5` 为测试集，其余 9 个已完成标注的 session 为训练集，验证集为空。此前 `session_20260917075744362_8` 的 28 次保留、2 次舍弃结果仍保存在原 session。
 
+当前分支为 `m2-direct-endpoint`。M2 初版已实现并跑通：训练集增量中位数、Model A（Ridge）和 Model B（Gradient Boosting）都直接预测“跨线点到最终触点”的二维增量。依赖、自动测试、真实训练、量化和视频抽帧核查均已完成；当前结果是 `_5` 后 10 次的小规模测试 demo，不代表完整测试集的正式泛化结论。
+
 ## 文档导航
 
 每类信息只在对应文档中维护，其余文档通过链接引用。
@@ -41,7 +43,30 @@ P0 代码已实现，范围限定为左手拇指从左向右跨越中线并预�
 
 当前仓库业务内容包括采集页面、离线 CLI 和上述文档。
 
-## 当前 milestone：M1 最小闭环（流程已跑通，待有效数据验证）
+## 当前 milestone：M2 直接落点（初版已跑通）
+
+M2 保持 P0 的首次左→右跨线预测时刻和固定数据划分，比较三种方法：训练集二维增量中位数、Ridge、Gradient Boosting。输入仅限跨线及之前最多 300 ms 的归一化拇指轨迹特征；测试 session `_5` 不参与填充、标准化、选参或训练。完整方法、候选参数、指标和验收顺序见 [M2 实验协议](docs/EXPERIMENTS.md#m2-直接落点实验)，模块边界和数据字段分别见 [ARCHITECTURE.md](docs/ARCHITECTURE.md#m2-直接落点入口) 与 [DATA.md](docs/DATA.md#m2-样本与预测数据)。
+
+当前已实现并验证：`scripts/m2_endpoint_models.py`、`config.yaml:m2`、scikit-learn 依赖声明，以及 baseline 评估／视频渲染的复用改动。
+
+接下来按以下顺序推进：
+
+1. 在完整 `_5` 测试 session 上重复量化，避免只看后 10 次。
+2. 用更多独立测试 session 重复验证训练集增量中位数、Ridge 和 Gradient Boosting。
+3. 根据重复结果判断是否进入 M3 的时序模型探索。
+4. 继续保持每次运行的输入、配置、git commit 和输出目录可追溯。
+
+复现当前 M2 后 10 次 demo 的入口如下；输出目录必须不存在：
+
+```bash
+conda activate visual_pretouch
+python scripts/m2_endpoint_models.py \
+  --test-session dataset/session_20260917075240834_5 \
+  --last-n 10 \
+  --output outputs/m2_direct_endpoint_v1_session_20260917075240834_5_last10
+```
+
+## 上一 milestone：M1 最小闭环（流程已跑通，待有效数据验证）
 
 用一段短会话完成采集、视频对齐、拇指跨线预测和可视化评估。统一入口是 `scripts/visual_pretouch.py`。
 

@@ -15,6 +15,9 @@ METHOD_LABELS = {
     'b1_crossing_projection': 'B1',
     'b2_linear_stat_time': 'B2',
     'b3_linear_oracle_time': 'B3',
+    'm2_median_delta': 'M2 median delta',
+    'm2_model_a_ridge': 'M2 Model A Ridge',
+    'm2_model_b_gradient_boosting': 'M2 Model B Gradient Boosting',
 }
 
 

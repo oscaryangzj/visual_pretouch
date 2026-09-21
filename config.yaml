@@ -86,18 +86,45 @@ prediction:
   # 空列表：扫描 dataset/session_*；仅纳入已有审核、四角标定和有效缓存的会话。
   training_sessions: []
 
+# M2：在首次左→右跨线时，直接预测“跨线点 → 最终触点”的二维增量。
+# 缺失值填充、标准化、模型选择和最终拟合均只使用 data_split.training_sessions。
+m2:
+  history_windows_ms: [50, 100, 200, 300]
+  quality_window_ms: 300
+  min_points_per_window: 3
+  group_cv_folds: 5
+  random_state: 42
+  ridge_alphas: [0.1, 1.0, 10.0, 100.0]
+  gradient_boosting:
+    loss: huber
+    n_estimators: [50, 100]
+    learning_rate: [0.03, 0.05]
+    max_depth: [1, 2]
+    min_samples_leaf: 10
+
 evaluation:
   hit_radii_mm: [10, 15, 20, 30]
   lead_times_ms: [50, 100, 150, 200]
 
 render:
-  trajectory_tail: 18
+  trajectory_tail: 22
   demo_last_n: 10
   playback_rate: 0.5
-  prediction_marker_radius_px: 20
+  prediction_marker_radius_px: 10
+  screen_border_outer_width_px: 4
+  screen_border_width_px: 1
+  centerline_dash_fraction: 0.03
+  centerline_width_px: 2
   demo_before_touch_ms: 1000
   demo_before_crossing_ms: 200
   demo_after_touch_ms: 200
+  overlay:
+    font_scale: 0.62
+    line_height_px: 28
+    panel_width_fraction: 0.38
+    panel_alpha: 0.78
+    panel_padding_px: 16
+    panel_radius_px: 18
 
 review:
   before_flash_ms: 1000

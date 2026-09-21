@@ -198,7 +198,7 @@ def predict_trial(trial, prior_ms, velocity_scale=1.0, split='train'):
     return rows
 
 
-def evaluate(rows, trials, device_cfg, evaluation_cfg, split='train'):
+def evaluate(rows, trials, device_cfg, evaluation_cfg, split='train', methods=METHODS):
     by_key = {(t['trial_id'], t['touch_index']): t for t in trials}
     details = []
     for row in rows:
@@ -216,9 +216,9 @@ def evaluate(rows, trials, device_cfg, evaluation_cfg, split='train'):
                 result.update(error_mm=float(np.linalg.norm(delta * size)), raw_error_mm=float(np.linalg.norm(raw_delta * size)))
         details.append(result)
     common = {t['trial_id'] for t in trials if all(any(r['trial_id'] == t['trial_id'] and r['method'] == m and r['status'] == 'ok'
-                                                       for r in rows) for m in METHODS)}
+                                                       for r in rows) for m in methods)}
     summaries = {}
-    for method in METHODS:
+    for method in methods:
         group = [r for r in details if r['method'] == method]
         good = [r for r in group if r['status'] == 'ok']
         errors = [r['error_normalized'] for r in good]
@@ -248,7 +248,7 @@ def evaluate(rows, trials, device_cfg, evaluation_cfg, split='train'):
                      'common_valid_trials': sorted(common), 'methods': summaries}
 
 
-def render(data, trials, rows, method, output, cfg):
+def render(data, trials, rows, method, output, cfg, title=None):
     state = data['state']
     playback_rate = float(cfg.get('playback_rate', 1.0))
     if not 0 < playback_rate <= 1:
@@ -261,18 +261,156 @@ def render(data, trials, rows, method, output, cfg):
         raise RuntimeError(f'Cannot write {output}')
     predictions = {(r['trial_id'], r['touch_index']): r for r in rows if r['method'] == method}
     frames_written, clips = 0, []
+    overlay_cfg = cfg.get('overlay', {})
+    font_scale = float(overlay_cfg.get('font_scale', 0.68))
+    line_height = int(overlay_cfg.get('line_height_px', 32))
+    panel_alpha = float(overlay_cfg.get('panel_alpha', 0.82))
+    panel_padding = int(overlay_cfg.get('panel_padding_px', 18))
+    panel_width = int(state['width'] * float(overlay_cfg.get('panel_width_fraction', 0.56)))
+    panel_width = max(180, min(state['width'] - 24, panel_width))
+    panel_radius = int(overlay_cfg.get('panel_radius_px', 18))
+    border_outer_width = int(cfg.get('screen_border_outer_width_px', 8))
+    border_width = int(cfg.get('screen_border_width_px', 3))
+    centerline_dash = float(cfg.get('centerline_dash_fraction', 0.055))
+    centerline_width = int(cfg.get('centerline_width_px', 2))
+
+    def rounded_rect(image, top_left, bottom_right, radius, color, thickness=-1):
+        x1, y1 = top_left
+        x2, y2 = bottom_right
+        radius = max(1, min(radius, (x2 - x1) // 2, (y2 - y1) // 2))
+        if thickness < 0:
+            cv2.rectangle(image, (x1 + radius, y1), (x2 - radius, y2), color, -1)
+            cv2.rectangle(image, (x1, y1 + radius), (x2, y2 - radius), color, -1)
+            for center in ((x1 + radius, y1 + radius), (x2 - radius, y1 + radius),
+                           (x1 + radius, y2 - radius), (x2 - radius, y2 - radius)):
+                cv2.circle(image, center, radius, color, -1, cv2.LINE_AA)
+        else:
+            cv2.line(image, (x1 + radius, y1), (x2 - radius, y1), color, thickness, cv2.LINE_AA)
+            cv2.line(image, (x1 + radius, y2), (x2 - radius, y2), color, thickness, cv2.LINE_AA)
+            cv2.line(image, (x1, y1 + radius), (x1, y2 - radius), color, thickness, cv2.LINE_AA)
+            cv2.line(image, (x2, y1 + radius), (x2, y2 - radius), color, thickness, cv2.LINE_AA)
+            cv2.ellipse(image, (x1 + radius, y1 + radius), (radius, radius), 180, 0, 90, color, thickness, cv2.LINE_AA)
+            cv2.ellipse(image, (x2 - radius, y1 + radius), (radius, radius), 270, 0, 90, color, thickness, cv2.LINE_AA)
+            cv2.ellipse(image, (x2 - radius, y2 - radius), (radius, radius), 0, 0, 90, color, thickness, cv2.LINE_AA)
+            cv2.ellipse(image, (x1 + radius, y2 - radius), (radius, radius), 90, 0, 90, color, thickness, cv2.LINE_AA)
+
+    def draw_text(frame, text, xy, scale, color, thickness=1):
+        cv2.putText(frame, text, (xy[0] + 1, xy[1] + 2), cv2.FONT_HERSHEY_DUPLEX,
+                    scale, (8, 12, 18), thickness + 2, cv2.LINE_AA)
+        cv2.putText(frame, text, xy, cv2.FONT_HERSHEY_DUPLEX,
+                    scale, color, thickness, cv2.LINE_AA)
+
+    def draw_info_card(frame, method_title, meta, status, detail, status_color):
+        """Draw a restrained HUD card with one clear state and minimal metadata."""
+        height = panel_padding * 2 + line_height * 3
+        left, top = 18, 18
+        right = min(state['width'] - 18, left + panel_width)
+        bottom = min(state['height'] - 18, top + height)
+        layer = frame.copy()
+        rounded_rect(layer, (left + 4, top + 5), (right + 4, bottom + 5), panel_radius, (14, 9, 6), -1)
+        rounded_rect(layer, (left, top), (right, bottom), panel_radius, (38, 27, 20), -1)
+        cv2.addWeighted(layer, panel_alpha, frame, 1.0 - panel_alpha, 0, frame)
+        rounded_rect(frame, (left, top), (right, bottom), panel_radius, (116, 96, 82), 1)
+
+        text_left = left + panel_padding
+        title_y = top + panel_padding + line_height - 7
+        meta_y = title_y + line_height
+        detail_y = meta_y + line_height
+        draw_text(frame, method_title, (text_left, title_y), font_scale, (245, 247, 250), 1)
+        draw_text(frame, meta, (text_left, meta_y), font_scale * 0.78, (168, 178, 193), 1)
+
+        pill_scale = font_scale * 0.72
+        (pill_w, pill_h), _ = cv2.getTextSize(status, cv2.FONT_HERSHEY_DUPLEX, pill_scale, 1)
+        pill_left = text_left
+        pill_top = detail_y - pill_h - 8
+        pill_right = pill_left + pill_w + 18
+        pill_bottom = detail_y + 6
+        rounded_rect(frame, (pill_left, pill_top), (pill_right, pill_bottom), 8, status_color, -1)
+        cv2.putText(frame, status, (pill_left + 9, detail_y), cv2.FONT_HERSHEY_DUPLEX,
+                    pill_scale, (255, 255, 255), 1, cv2.LINE_AA)
+        detail_left = pill_right + 12
+        draw_text(frame, detail, (detail_left, detail_y), font_scale * 0.78, (214, 220, 229), 1)
+
     def marker(frame, uv, color, actual=False):
         layer = np.zeros_like(frame)
         xy = pipeline.norm_to_image(inverse, uv)
         if actual:
-            cv2.circle(layer, xy, 13, color, 3)
+            cv2.circle(layer, xy, 11, (250, 250, 250), -1, cv2.LINE_AA)
+            cv2.circle(layer, xy, 8, color, -1, cv2.LINE_AA)
+            cv2.circle(layer, xy, 3, (255, 255, 255), -1, cv2.LINE_AA)
         else:
             radius = int(cfg['prediction_marker_radius_px'])
-            cv2.circle(layer, xy, radius + 4, (255, 255, 255), 5)
-            cv2.circle(layer, xy, radius, color, 4)
-            cv2.drawMarker(layer, xy, color, cv2.MARKER_CROSS, radius * 2, 4)
+            cv2.circle(layer, xy, radius + 5, (16, 22, 32), -1, cv2.LINE_AA)
+            cv2.circle(layer, xy, radius + 2, (255, 255, 255), -1, cv2.LINE_AA)
+            cv2.circle(layer, xy, radius, color, -1, cv2.LINE_AA)
+            cv2.circle(layer, xy, max(2, radius // 4), (255, 255, 255), -1, cv2.LINE_AA)
         pixels = mask & np.any(layer, axis=2)
         frame[pixels] = layer[pixels]  # Keep the marker itself inside the screen.
+
+    def smooth_path(points, passes=2):
+        """Chaikin smoothing keeps the observed path shape without predicting new positions."""
+        path = np.asarray(points, dtype=np.float32)
+        if len(path) < 3:
+            return path
+        for _ in range(passes):
+            refined = [path[0]]
+            for left, right in zip(path[:-1], path[1:]):
+                refined.extend((0.75 * left + 0.25 * right, 0.25 * left + 0.75 * right))
+            refined.append(path[-1])
+            path = np.asarray(refined, dtype=np.float32)
+        return path
+
+    def draw_trajectory(frame, first_frame, current_frame):
+        points = []
+        start = max(first_frame, current_frame - int(cfg['trajectory_tail']))
+        for row in data['trajectory'][start:current_frame + 1]:
+            if not row['valid']:
+                if points:
+                    break
+                continue
+            points.append((row['thumb_tip_x_px'], row['thumb_tip_y_px']))
+        if len(points) < 2:
+            return
+        path = smooth_path(points)
+        for index, (left, right) in enumerate(zip(path[:-1], path[1:])):
+            progress = (index + 1) / max(1, len(path) - 1)
+            alpha = 0.10 + 0.72 * progress
+            color = (210, round(175 + 55 * progress), round(95 - 25 * progress))
+            left_px = np.rint(left).astype(int)
+            right_px = np.rint(right).astype(int)
+            x1 = max(0, min(left_px[0], right_px[0]) - 3)
+            y1 = max(0, min(left_px[1], right_px[1]) - 3)
+            x2 = min(frame.shape[1], max(left_px[0], right_px[0]) + 4)
+            y2 = min(frame.shape[0], max(left_px[1], right_px[1]) + 4)
+            if x1 >= x2 or y1 >= y2:
+                continue
+            roi = frame[y1:y2, x1:x2]
+            segment = roi.copy()
+            cv2.line(segment, (left_px[0] - x1, left_px[1] - y1),
+                     (right_px[0] - x1, right_px[1] - y1), color, 2, cv2.LINE_AA)
+            cv2.addWeighted(segment, alpha, roi, 1.0 - alpha, 0, roi)
+
+    def draw_thumb(frame, track):
+        if not track['valid']:
+            return
+        xy = (round(track['thumb_tip_x_px']), round(track['thumb_tip_y_px']))
+        glow = frame.copy()
+        cv2.circle(glow, xy, 10, (185, 235, 85), -1, cv2.LINE_AA)
+        cv2.addWeighted(glow, 0.18, frame, 0.82, 0, frame)
+        cv2.circle(frame, xy, 5, (245, 250, 250), -1, cv2.LINE_AA)
+        cv2.circle(frame, xy, 3, (175, 235, 70), -1, cv2.LINE_AA)
+
+    def draw_screen_frame(frame, corners):
+        cv2.polylines(frame, [corners], True, (16, 22, 30), border_outer_width, cv2.LINE_AA)
+        cv2.polylines(frame, [corners], True, (205, 218, 224), border_width, cv2.LINE_AA)
+        accent = (225, 220, 100)
+        for index, corner in enumerate(corners):
+            previous_corner = corners[(index - 1) % len(corners)]
+            next_corner = corners[(index + 1) % len(corners)]
+            toward_previous = corner + 0.13 * (previous_corner - corner)
+            toward_next = corner + 0.13 * (next_corner - corner)
+            cv2.line(frame, tuple(corner), tuple(np.rint(toward_previous).astype(int)), accent, 2, cv2.LINE_AA)
+            cv2.line(frame, tuple(corner), tuple(np.rint(toward_next).astype(int)), accent, 2, cv2.LINE_AA)
     try:
         for number, trial in enumerate(trials, 1):
             calibration = trial.get('calibration', state['calibration'])
@@ -296,35 +434,44 @@ def render(data, trials, rows, method, output, cfg):
                 ok, frame = cap.read()
                 if not ok:
                     raise RuntimeError(f'Cannot decode frame {i}')
-                cv2.polylines(frame, [corners], True, (255, 210, 50), 2)
-                cv2.line(frame, pipeline.norm_to_image(inverse, (.5, 0)), pipeline.norm_to_image(inverse, (.5, 1)), (255, 50, 255), 2)
-                for j in range(max(first + 1, i - cfg['trajectory_tail']), i + 1):
-                    a, b = data['trajectory'][j - 1:j + 1]
-                    if a['valid'] and b['valid']:
-                        cv2.line(frame, (round(a['thumb_tip_x_px']), round(a['thumb_tip_y_px'])),
-                                 (round(b['thumb_tip_x_px']), round(b['thumb_tip_y_px'])), (0, 220, 255), 2)
-                if track['valid']:
-                    cv2.circle(frame, (round(track['thumb_tip_x_px']), round(track['thumb_tip_y_px'])), 7, (0, 255, 100), 2)
+                draw_screen_frame(frame, corners)
+                centerline_layer = frame.copy()
+                for start in np.arange(0.0, 1.0, max(0.01, centerline_dash * 2.0)):
+                    end = min(1.0, start + centerline_dash)
+                    a = pipeline.norm_to_image(inverse, (.5, float(start)))
+                    b = pipeline.norm_to_image(inverse, (.5, float(end)))
+                    cv2.line(centerline_layer, a, b, (80, 210, 255), centerline_width, cv2.LINE_AA)
+                cv2.addWeighted(centerline_layer, 0.86, frame, 0.14, 0, frame)
+                draw_trajectory(frame, first, i)
+                draw_thumb(frame, track)
                 visible = prediction['status'] == 'ok' and i >= prediction['prediction_frame']
-                lines = [TITLES[METHODS.index(method)] + ' | TRAINING DEMO',
-                         f"{number}/{len(trials)}  {trial['trial_id']} | thumb=green, prediction=red, actual=blue after click"]
+                method_title = title or TITLES[METHODS.index(method)]
+                split_label = str(prediction.get('split', 'train')).upper()
+                meta = f"{number:02d} / {len(trials):02d}    {split_label}    {trial['trial_id']}"
                 if visible:
-                    marker(frame, (prediction['pred_u'], prediction['pred_v']), (0, 70, 255))
-                    lines.append(f"prediction ({prediction['pred_u']:.3f}, {prediction['pred_v']:.3f}) | horizon {prediction['horizon_ms']:.0f} ms | clipped {prediction['clipped']}")
-                    if method != METHODS[0]:
-                        lines.append(f"100 ms local velocity x {prediction['velocity_scale']:.2f}")
+                    marker(frame, (prediction['pred_u'], prediction['pred_v']), (70, 92, 245))
+                    status = 'PREDICTED'
+                    status_color = (70, 92, 225)
+                    detail = f"u {prediction['pred_u']:.3f}   v {prediction['pred_v']:.3f}"
+                    if prediction.get('horizon_ms', '') != '':
+                        detail += f"    {float(prediction['horizon_ms']):.0f} ms"
+                    if prediction.get('clipped'):
+                        detail += '    clipped'
                 elif prediction['status'] != 'ok':
-                    lines.append('FAILED: ' + prediction['failure_reason'])
+                    status = 'FAILED'
+                    status_color = (70, 80, 210)
+                    detail = prediction['failure_reason']
                 else:
-                    lines.append('Waiting for first left-to-right crossing')
+                    status = 'TRACKING'
+                    status_color = (120, 135, 155)
+                    detail = 'Waiting for centerline crossing'
                 if track['video_time_ms'] >= trial['touch_time_video_ms']:
-                    marker(frame, (trial['gt_u'], trial['gt_v']), (255, 150, 20), actual=True)
+                    marker(frame, (trial['gt_u'], trial['gt_v']), (255, 110, 25), actual=True)
                     if visible:
-                        lines.append(f"AFTER CLICK | lead {prediction['lead_time_ms']:.0f} ms | error {prediction['error_normalized']:.3f} normalized | approximate timing")
-                for j, text in enumerate(lines):
-                    xy = (20, 35 + 34 * j)
-                    cv2.putText(frame, text, xy, cv2.FONT_HERSHEY_SIMPLEX, .8, (0, 0, 0), 5)
-                    cv2.putText(frame, text, xy, cv2.FONT_HERSHEY_SIMPLEX, .8, (255, 255, 255), 2)
+                        status = 'RESULT'
+                        status_color = (190, 125, 45)
+                        detail = f"lead {prediction['lead_time_ms']:.0f} ms    error {prediction['error_normalized']:.3f} norm"
+                draw_info_card(frame, method_title, meta, status, detail, status_color)
                 writer.write(frame)
                 frames_written += 1
             clips.append({'trial_id': trial['trial_id'], 'source_begin_ms': begin, 'source_end_ms': finish,

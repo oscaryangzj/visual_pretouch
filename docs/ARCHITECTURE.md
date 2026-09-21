@@ -16,6 +16,7 @@
 | `scripts/visual_pretouch.py evaluate` | 关联真实触点，执行预先约定的评估 | 预测、对齐、touch CSV → 明细、指标和图表、manifest |
 | `scripts/visual_pretouch.py render` | 生成可核查的叠加视频 | 视频、标定、轨迹、预测、触点、对齐 → demo video |
 | `scripts/baseline_demo.py` | 接入已审核缓存、拟合时间先验，运行本轮三 baseline 并拼接点击片段 | 已审核 session、四角、配置 → 时间先验、预测、指标、三个视频 |
+| `scripts/m2_endpoint_models.py` | 从跨线前因果轨迹构造特征，拟合增量中位数、Ridge 和 Gradient Boosting，生成测试预测与视频 | 固定训练／测试 session、审核与四角 → 特征表、模型、预测、指标、三个视频 |
 | `scripts/baseline_metrics.py` | 从任意 baseline 预测表汇总毫米误差和命中率 | 输出目录或 `predictions.csv` → 终端表格／JSON／CSV |
 | `scripts/review_session.py`、`scripts/review_session.html` | 本地浏览器显示逐次追踪，保存保留／舍弃选择与四角标注 | session、可选已有追踪与事件 → 机器缓存、审核文件、标定文件 |
 
@@ -53,6 +54,20 @@ touch CSV ────────────────→ alignment ──�
 5. 评估分开列出可用信息方法与 oracle 对照，渲染同试次三个方法。跨线时冻结预测，实际点击发生后才显示 GT、误差和提前时间；试次切换清除上次状态，缺失处断开轨迹。边界上的预测标记绘制也限制在操作区域内。
 
 上述链路由 `scripts/baseline_demo.py` 承载。训练统计、因果位置预测与显式 oracle 入口分开；渲染器逐试次清除预测，按同一时间窗输出三份视频。标定缺失时停止；其他训练 session 的不可用输入记录原因，不强行合并。审核文件保持原样，派生文件写入新的实验目录；无需重新标记保留／舍弃。
+
+### M2 直接落点入口
+
+M2 复用 `baseline_demo.prepare_session` 得到逐 touch 的固定四角映射、首次左→右跨线、审核状态和投影轨迹，不重新提取 MediaPipe。每个样本只截取当前动作开始至跨线帧的轨迹，构造多个历史窗口的速度、位移和轨迹质量特征；标签是 `touch_uv - crossing_uv`。
+
+```text
+reviewed train sessions ─→ causal feature rows ─→ grouped CV ─→ frozen models
+reviewed test session  ─→ causal feature rows ───────────────→ prediction
+crossing position + predicted delta ─→ raw endpoint ─→ clip [0,1] ─→ metrics/video
+```
+
+训练集增量中位数不做模型拟合。Model A 使用训练集缺失值中位数填充、缺失指示、特征标准化和 Ridge；Model B 使用同样的训练集填充与缺失指示，再对 u/v 增量分别拟合 Gradient Boosting。模型选择按 `session_id` 分组交叉验证，任何 fold 都不能把同一 session 同时放入训练和验证。测试 session 不参与填充、标准化、参数选择或最终拟合。
+
+当前工作树已写入并验证 M2 入口、配置段、依赖声明，以及 baseline 评估／渲染的复用接口。依赖已在 `visual_pretouch` 环境安装，自动测试、真实训练、输出生成和抽帧核查均已完成；当前结果仍只是 `_5` 后 10 次的小规模测试 demo，不等于完整测试集或正式泛化结论。
 
 `config.yaml` 是超参数入口：轨迹窗口、检测阈值、外推时间、目标采样设置和随机种子等随实现加入，不在脚本中散落硬编码默认值。已确定的坐标语义不能作为随意调参项。
 
