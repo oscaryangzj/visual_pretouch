@@ -102,7 +102,7 @@ MediaPipe 的 `min_detection_confidence` 控制手掌检测接受门槛，`min_t
 
 此变更明确改变关键点处理和缺失判定，不改变 GT、中线、预测时间或自动保留规则。正式实验需固定配置及处理版本，不能混用旧原始轨迹与新连续轨迹。
 
-## Demo 预测数据（规划，待实现）
+## Demo 预测数据
 
 本节定义新版派生数据，不改写已生成的旧预测文件。算法、统计量和训练数据使用规则的唯一维护位置为 [EXPERIMENTS.md](EXPERIMENTS.md#baseline)。
 
@@ -116,7 +116,7 @@ MediaPipe 的 `min_detection_confidence` 控制手掌检测接受门槛，`min_t
 
 新处理目录内的 `time_prior.json` 保存 `schema_version`、统计量名称、`prior_horizon_ms`、实际贡献的 `(session_id,trial_id,touch_index)` 清单和样本数、各样本剩余时间及其分布摘要。记录训练 session 清单、各 session 的审核清单哈希、轨迹／对齐标识及配置快照引用；跨 session 不能只靠 trial_id 关联。没有有效样本时保存失败状态，时长留空；不写入原始 session 文件。
 
-### 预测表 v3
+### 预测表 v4
 
 保留旧预测表的试次、方法、预测模式、帧、时间、最终 `pred_u/v`、状态和失败原因。新增字段：
 
@@ -125,15 +125,21 @@ MediaPipe 的 `min_detection_confidence` 控制手掌检测接受门槛，`min_t
 | `raw_pred_u/v` | 边界约束前的预测，允许有限越界值 |
 | `clipped` | 有效预测是否被边界裁剪：1／0；失败时留空 |
 | `horizon_ms`、`horizon_source` | 外推时长与来源：`none`／`training_median`／`oracle_touch_time` |
-| `velocity_u_per_ms`、`velocity_v_per_ms` | B2/B3 共用的历史速度，单位为归一化坐标／ms；B1 留空 |
+| `velocity_u_per_ms`、`velocity_v_per_ms` | B2/B3 共用的原始历史速度，单位为归一化坐标／ms；B1 留空 |
+| `velocity_scale` | B2/B3 共用的速度衰减系数；B1 留空 |
+| `applied_velocity_u_per_ms`、`applied_velocity_v_per_ms` | `velocity_scale × velocity`，即实际参与外推的速度；B1 留空 |
 | `uses_oracle_time` | 方法是否使用当前试次事后触摸时间；B3 为 1，B1/B2 为 0 |
 | `split` | 数据集归属；当前 demo 为 `train`，没有会话内标定／比较分块 |
+| `calibration_source_trial_id`、`calibration_source_touch_index` | 本次实际使用的四角来自哪个原始 touch |
+| `calibration_inherited`、`calibration_reference_frame` | 是否沿用其他 touch 的四角、该标注的参考帧 |
 
-最终有限 `pred_u/v` 均在 `[0,1]` 内，主评估和渲染使用这些坐标。原始轨迹 `thumb_u/v` 保持原语义，不作预测边界裁剪。失败坐标留空，不能产生默认边界点。稳定方法标识和公式见 EXPERIMENTS；schema v3 与方法标识共同防止新版统计时间 B2 混入历史固定时间结果。
+最终有限 `pred_u/v` 均在 `[0,1]` 内，主评估和渲染使用这些坐标。原始轨迹 `thumb_u/v` 保持原语义，不作预测边界裁剪。失败坐标留空，不能产生默认边界点。稳定方法标识和公式见 EXPERIMENTS；schema v4 增加速度衰减字段，防止与未衰减的既有输出混用。
+
+当前 demo 的 `trajectory.csv` 按动作保存投影结果，增加 `trial_id`、`touch_index` 和 `calibration_source_trial_id`，以 `(trial_id,touch_index,frame_index)` 标识一行。每个动作内使用同一映射；覆盖动作开始至点击后预览结束的源帧，缺失帧保留并标记无效。原生像素轨迹和审核缓存不改变。实验目录的 `calibration.json` 是完整四角文件快照，可核对每次使用的变换；旧 CLI 的单次 `extract` 仍只使用顶层静态映射。
 
 ## 人工审核数据
 
-审核单位为原始 touch。唯一结果文件是 `<session>/review.csv`，与原始视频和采集文件同目录；不更改原始文件，也不创建审核输出目录。CSV 使用 UTF-8，包含全部原始点击：
+审核单位为原始 touch。保留／舍弃的唯一结果文件是 `<session>/review.csv`，与原始视频和采集文件同目录；不更改原始文件，也不创建审核输出目录。CSV 使用 UTF-8，包含全部原始点击：
 
 | 字段 | 定义 |
 | --- | --- |
@@ -148,6 +154,14 @@ session 由所在目录确定，按 `(trial_id, touch_index)` 匹配原始 touch
 `config.yaml` 的 `review.before_flash_ms`、`review.after_flash_ms`、`review.display_max_width_px`、`review.trace_tail` 和 `review.slow_playback_multiplier` 分别控制预览区间、页面最大宽度、轨迹长度和慢放倍率。
 
 后续分析读取此文件中的 `keep=1`；未审核项不默认为保留。实验需要固定筛选结果时，由实验记录保存实际使用的文件哈希和试次标识，不要求审核工具生成实验目录或版本导出。
+
+### 屏幕四角标注
+
+review 将全部四角保存到 `<session>/calibration.json`。schema v2 的顶层保留首次标定的字段，并增加 `touch_calibrations` 数组；数组只保存后续单独标注的触摸，每条记录以原始 `(trial_id,touch_index)` 关联。各条标注包含 `image_points_px`、`homography_image_to_screen`、`image_size_px`、`reference_frame_index`、`reference_time_ms`、`session_id`、视频身份／方向和 `annotation_source=review`。像素坐标与旋转后的原视频尺寸一致，不使用浏览器缩放后的显示坐标；四角映射到 `(0,0)`、`(1,0)`、`(1,1)`、`(0,1)`。
+
+按完整原始触摸顺序解析：首次使用顶层标定，后续有单独标注则覆盖当前映射，没有则继续沿用上一触摸的有效映射。继承可连续传递，不能使用后续标注回填前面的触摸，也不插值变换。保存后从当前触摸向后更新，遇到下一个单独标注即停止；“沿用上一次四角”移除本次单独标注。新单独标注仅允许 `keep=1`，但之后修改保留／舍弃不会删除已有四角；完整序列包含舍弃项，已存几何仍可向后沿用。
+
+缺少标定时必须先在第一次触摸片段的一帧上补标。已有 schema v1 自动作为首次标定读取并向后沿用，不因打开页面重写文件；各标注校验 session、图像尺寸和视频身份。补标与重标不修改 `review.csv`、原视频、touch 文件或追踪缓存，也不要求重新审核。保存时原子更新这一个 JSON；实验保存实际使用的完整标定快照和哈希，既有结果不随重标改变。逐触摸补标只处理不同动作之间的位置变化，同一动作内仍是静态映射。
 
 ### 自动准备缓存
 

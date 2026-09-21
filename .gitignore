@@ -10,10 +10,4 @@ __pycache__/
 /data/
 
 # Keep lightweight reports, coordinates, configs and reproduction scripts.
-/outputs/**/*.mp4
-/outputs/**/*.MP4
-/outputs/**/*.jpg
-/outputs/**/*.jpeg
-/outputs/**/*.png
-/outputs/**/matplotlib_cache/
-/outputs/**/cache/
+/outputs

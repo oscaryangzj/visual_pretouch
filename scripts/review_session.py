@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 import visual_pretouch as pipeline
 
@@ -83,6 +84,133 @@ def load_review(session, touches):
     return rows
 
 
+def calibration_points(value, width, height):
+    if (not isinstance(value, list) or len(value) != 4 or
+            any(not isinstance(p, list) or len(p) != 2 or
+                any(type(v) not in (int, float) for v in p) for p in value)):
+        raise ValueError("请依次标注左上、右上、右下、左下四个角")
+    points = np.asarray(value, dtype=np.float32)
+    if (not np.isfinite(points).all() or np.any(points < 0) or
+            np.any(points[:, 0] >= width) or np.any(points[:, 1] >= height)):
+        raise ValueError("角点必须位于视频画面内")
+    if not cv2.isContourConvex(points) or cv2.contourArea(points, oriented=True) <= 0:
+        raise ValueError("四角必须按左上、右上、右下、左下顺序构成凸四边形")
+    return points
+
+
+def make_calibration(state, request):
+    index = request.get("index", 0)
+    if type(index) is not int or not 0 <= index < len(state["review"]):
+        raise ValueError("无效的触摸编号")
+    if index and (state["calibration"] is None or state["review"][index]["keep"] != "1"):
+        raise ValueError("请先完成首次标定；只有保留的触摸可以单独标注四角")
+    frame = request["frame_index"]
+    if type(frame) is not int or not 0 <= frame < len(state["tracking"]):
+        raise ValueError("无效的标定帧")
+    time = state["tracking"][frame][0]
+    lower = state["flashes"][index - 1] if index else 0
+    if not lower <= time <= state["flashes"][index] + state["settings"]["after_flash_ms"] / 1000:
+        raise ValueError("请在当前触摸的片段中标定")
+    points = calibration_points(request["image_points_px"], state["width"], state["height"])
+    screen = np.float32([[0, 0], [1, 0], [1, 1], [0, 1]])
+    H = cv2.getPerspectiveTransform(points, screen)
+    if not np.isfinite(H).all() or np.linalg.matrix_rank(H) != 3:
+        raise ValueError("无法计算有效的屏幕映射，请重新标注")
+    return {"schema_version": 1, "session_id": state["session"],
+            "trial_id": state["review"][index]["trial_id"],
+            "touch_index": state["review"][index]["touch_index"],
+            "reference_frame_index": frame, "reference_time_ms": time * 1000,
+            "image_size_px": [state["width"], state["height"]],
+            "video_orientation_meta_degrees": state["orientation_degrees"],
+            "video_sha256": state["video_sha256"],
+            "image_points_px": points.tolist(), "screen_points_uv": screen.tolist(),
+            "homography_image_to_screen": H.tolist(),
+            "screen_region": "browser operation area", "annotation_source": "review"}
+
+
+def validate_calibration(value, state, path):
+    if not isinstance(value, dict):
+        raise ValueError(f"Invalid calibration record: {path}")
+    pipeline.validate_calibration_size(value, state["width"], state["height"])
+    if value.get("session_id") != state["session"]:
+        raise ValueError(f"Calibration belongs to another session: {path}")
+    if value.get("video_sha256", state["video_sha256"]) != state["video_sha256"]:
+        raise ValueError(f"Calibration belongs to another video: {path}")
+    points = calibration_points(value.get("image_points_px"), state["width"], state["height"])
+    H = np.asarray(value.get("homography_image_to_screen"), dtype=np.float64)
+    if (H.shape != (3, 3) or not np.isfinite(H).all() or np.linalg.matrix_rank(H) != 3 or
+            not np.allclose(pipeline.project(H, points), [[0, 0], [1, 0], [1, 1], [0, 1]], atol=1e-5)):
+        raise ValueError(f"Invalid calibration mapping: {path}")
+
+
+def load_calibration(path, state):
+    if not path.exists():
+        return None
+    value = json.loads(path.read_text(encoding="utf-8"))
+    validate_calibration(value, state, path)
+    keys = {(r["trial_id"], r["touch_index"]) for r in state["review"][1:]}
+    seen = set()
+    records = value.get("touch_calibrations", [])
+    if not isinstance(records, list):
+        raise ValueError(f"Invalid touch calibrations: {path}")
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError(f"Invalid touch calibration: {path}")
+        key = (record.get("trial_id"), record.get("touch_index"))
+        if key not in keys or key in seen:
+            raise ValueError(f"Calibration touch identifiers do not match session: {path}")
+        seen.add(key)
+        validate_calibration(record, state, path)
+    return value
+
+
+def effective_calibrations(calibration, reviews):
+    """Carry the previous touch's geometry forward; never borrow from a later touch."""
+    if calibration is None:
+        return [None] * len(reviews)
+    current = {k: v for k, v in calibration.items() if k != "touch_calibrations"}
+    current["schema_version"] = 1
+    records = {(r["trial_id"], r["touch_index"]): r for r in calibration.get("touch_calibrations", [])}
+    source, resolved = 0, []
+    for index, review in enumerate(reviews):
+        key = (review["trial_id"], review["touch_index"])
+        if key in records:
+            current, source = records[key], index
+        resolved.append({"calibration": current, "source_index": source, "inherited": source != index})
+    return resolved
+
+
+def update_calibration(state, request):
+    index = request.get("index", 0)
+    if type(index) is not int or not 0 <= index < len(state["review"]):
+        raise ValueError("无效的触摸编号")
+    old = state["calibration"]
+    key = state["review"][index]
+    records = [r for r in (old or {}).get("touch_calibrations", [])
+               if (r["trial_id"], r["touch_index"]) != (key["trial_id"], key["touch_index"])]
+    if request.get("inherit") is True:
+        if index == 0 or old is None or key["keep"] != "1":
+            raise ValueError("首次标定必须保留；只有保留项可以恢复沿用")
+        updated = dict(old)
+    else:
+        record = make_calibration(state, request)
+        updated = record if index == 0 else dict(old)
+        if index:
+            records.append(record)
+    order = {(r["trial_id"], r["touch_index"]): i for i, r in enumerate(state["review"])}
+    updated.update(schema_version=2, touch_calibrations=sorted(records, key=lambda r: order[(r["trial_id"], r["touch_index"])]))
+    save_calibration(Path(state["calibration_path"]), updated)
+    state["calibration"] = updated
+    state["calibrations"] = effective_calibrations(updated, state["review"])
+    return {"calibration": updated, "calibrations": state["calibrations"]}
+
+
+def save_calibration(path, value):
+    temp = path.with_suffix(".json.tmp")
+    pipeline.write_json(temp, value)
+    os.replace(temp, path)
+
+
 def prepare(session, tracking_path, events_path, config):
     touches = pipeline.read_csv(one_file(session, "*_touches.csv"))
     if not touches or len({(t["trial_id"], t["touch_index"]) for t in touches}) != len(touches):
@@ -91,7 +219,7 @@ def prepare(session, tracking_path, events_path, config):
     if len(videos) != 1:
         raise ValueError(f"Expected one MP4 in {session}")
     video = videos[0]
-    cap, _ = pipeline.open_video(video)
+    cap, orientation = pipeline.open_video(video)
     fps, width, height = pipeline.video_meta(cap)
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
@@ -155,6 +283,12 @@ def prepare(session, tracking_path, events_path, config):
         state['raw_tracking'] = [[time / 1000, point] for time, point in cache['raw_frames']]
         state['tracking_status'] = cache['tracking_status']
         state['tracking_info']['continuity'] = cache['identity']['tracking'].get('continuity', {}).get('enabled', False)
+    from review_prepare import fingerprint
+    state["video_sha256"] = cache["identity"]["video_sha256"] if cache else fingerprint(video)
+    state["orientation_degrees"] = orientation
+    state["calibration_path"] = str(session / "calibration.json")
+    state["calibration"] = load_calibration(Path(state["calibration_path"]), state)
+    state["calibrations"] = effective_calibrations(state["calibration"], rows)
     return video, state
 
 
@@ -222,7 +356,7 @@ def make_handler(video, state):
                 pass
 
         def do_POST(self):
-            if self.path != "/api/review":
+            if self.path not in ("/api/review", "/api/calibration"):
                 self.send_error(404)
                 return
             origin = self.headers.get("Origin")
@@ -234,10 +368,17 @@ def make_handler(video, state):
                 if not 0 < length <= 1024:
                     raise ValueError("Invalid request size")
                 request = json.loads(self.rfile.read(length))
+                if self.path == "/api/calibration":
+                    with lock:
+                        updated = update_calibration(state, request)
+                        self.send_data(json.dumps(updated).encode(), "application/json")
+                    return
                 index, keep = request["index"], request["keep"]
                 if type(index) is not int or not 0 <= index < len(state["review"]) or keep not in ("", "0", "1"):
                     raise ValueError("Invalid touch or keep value")
                 with lock:
+                    if state["calibration"] is None:
+                        raise ValueError("请先在第一次触摸中标注屏幕四角")
                     updated = [dict(row) for row in state["review"]]
                     updated[index]["keep"] = keep
                     save_review(result, updated)
@@ -270,7 +411,7 @@ def main():
         return
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(video, state))
     url = f"http://127.0.0.1:{server.server_port}"
-    print(f"Review: {url}\nResults: {state['result_path']}\nCtrl+C to stop.", flush=True)
+    print(f"Review: {url}\nResults: {state['result_path']}\nCalibration: {state['calibration_path']}\nCtrl+C to stop.", flush=True)
     if not args.no_open:
         webbrowser.open(url)
     try:

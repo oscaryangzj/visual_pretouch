@@ -25,6 +25,9 @@
   .stage { position: relative; background: #10151d; margin-top: 12px; line-height: 0; }
   video { display: block; width: 100%; }
   #overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #overlay.marking { pointer-events: auto; cursor: crosshair; }
+  #calibration { border-left: 3px solid #446be3; padding-left: 12px; margin: 12px 0; }
+  [hidden] { display: none !important; }
   .stage:fullscreen { display: grid; align-items: center; }
   .stage:fullscreen video { height: 100%; object-fit: contain; }
   .stage:fullscreen #overlay { height: 100%; object-fit: contain; }
@@ -47,6 +50,16 @@
   </div>
   <div class="panel">
     <div class="row"><strong id="touch"></strong><span id="status"></span></div>
+    <div id="calibration">
+      <div class="row"><strong id="calibrationstatus"></strong>
+        <div class="controls"><button id="remark">标注本次四角</button><button id="inheritcorners">沿用上一次四角</button><button id="nextkept">下一个保留项</button></div></div>
+      <p class="muted">保留的触摸可单独标注；未标注时自动沿用上一次触摸的四角。</p>
+      <div id="markcontrols" hidden>
+        <p>先用时间条或逐帧选择四角清楚的一帧，再依次点击网页操作区域的<strong>左上、右上、右下、左下</strong>（不是手机外框）。第一个角点落下后锁定这一帧。</p>
+        <div class="controls"><button id="undocorner">撤销上一个角</button><button id="resetcorners">重标四角</button><button id="savecorners">保存四角</button><button id="cancelcorners">取消重标</button></div>
+        <p class="muted">已有的保留／舍弃结果会保留，只补充屏幕标定。</p>
+      </div>
+    </div>
     <div class="stage" id="stage"><video id="video" preload="metadata" playsinline muted></video><canvas id="overlay"></canvas></div>
     <input id="seek" type="range" step="0.001" aria-label="片段时间">
     <canvas id="timeline" aria-label="绿色为检出帧，红色为漏检帧，黄色为白闪"></canvas>
@@ -71,10 +84,14 @@
   const $ = id => document.getElementById(id);
   const video = $('video'), canvas = $('overlay'), ctx = canvas.getContext('2d');
   let data, index = 0, start = 0, end = 0, expanded = false, saving = false, presentedTime = 0;
+  let marking = false, corners = [], cornerFrame = null;
+  const cornerNames = ['左上', '右上', '右下', '左下'];
   const labels = {'': '未审核', '1': '保留', '0': '舍弃'};
 
   function error(text) { $('message').textContent = text; $('message').classList.add('error'); }
   function activeTracking() { return $('tracksource').value === 'raw' && data.raw_tracking ? data.raw_tracking : data.tracking; }
+  function currentCalibration() { return data.calibrations?.[index]; }
+  function nextKept() { return data.review.findIndex((r, i) => i > index && r.keep === '1'); }
   function frameAt(time) {
     let lo = 0, hi = data.tracking.length - 1;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (data.tracking[mid][0] < time) lo = mid + 1; else hi = mid; }
@@ -86,23 +103,103 @@
     $('trials').replaceChildren(...data.review.map((row, i) => {
       const b = document.createElement('button'); b.textContent = i + 1;
       b.className = `${row.keep === '1' ? 'keep' : row.keep === '0' ? 'drop' : ''} ${i === index ? 'active' : ''}`;
-      b.title = `${row.trial_id}：${labels[row.keep]}`; b.disabled = saving;
+      b.title = `${row.trial_id}：${labels[row.keep]}`; b.disabled = saving || marking;
       b.onclick = () => select(i); return b;
     }));
     $('touch').textContent = `第 ${index + 1} / ${data.review.length} 次点击 · ${data.review[index].trial_id}`;
     $('status').textContent = labels[data.review[index].keep];
   }
   function select(i) {
-    if (saving) return;
+    if (saving || (marking && i !== index)) return;
     index = Math.max(0, Math.min(i, data.review.length - 1));
     video.pause();
     start = expanded ? (index ? data.flashes[index - 1] : 0) : Math.max(0, data.flashes[index] - data.settings.before_flash_ms / 1000);
     end = Math.min(data.duration, data.flashes[index] + data.settings.after_flash_ms / 1000);
     $('seek').min = start; $('seek').max = end; $('seek').value = start;
     if (video.readyState) video.currentTime = start;
-    refreshList(); drawTimeline(); ctx.clearRect(0, 0, canvas.width, canvas.height);
+    refreshControls(); drawTimeline(); ctx.clearRect(0, 0, canvas.width, canvas.height);
     $('tracking').textContent = '加载片段…';
   }
+  function refreshControls() {
+    for (const b of document.querySelectorAll('button')) b.disabled = saving;
+    for (const id of ['keep', 'drop', 'clear', 'previous', 'next', 'play', 'replay', 'remark']) $(id).disabled = saving || marking;
+    const effective = currentCalibration();
+    $('remark').disabled ||= index > 0 && data.review[index].keep !== '1';
+    $('remark').textContent = effective && !effective.inherited ? '重新标注本次四角' : '标注本次四角';
+    $('inheritcorners').disabled = saving || marking || !index || !effective || effective.inherited || data.review[index].keep !== '1';
+    $('nextkept').disabled = saving || marking || nextKept() < 0;
+    for (const id of ['backframe', 'nextframe', 'expand']) $(id).disabled = saving || (marking && corners.length > 0);
+    $('seek').disabled = saving || (marking && corners.length > 0);
+    $('undocorner').disabled = saving || !corners.length;
+    $('resetcorners').disabled = saving || !corners.length;
+    $('savecorners').disabled = saving || corners.length !== 4;
+    $('cancelcorners').hidden = !data.calibration;
+    $('markcontrols').hidden = !marking;
+    canvas.classList.toggle('marking', marking);
+    $('calibrationstatus').textContent = marking ?
+      (corners.length < 4 ? `屏幕四角：${corners.length}/4 · 请点击${cornerNames[corners.length]}` : '屏幕四角：4/4 · 确认边界后保存') :
+      (effective ? `${effective.inherited ? `沿用第 ${effective.source_index + 1} 次四角` : '本次四角已标注'} · 参考帧 ${effective.calibration.reference_frame_index}` : '请先标注首次触摸的四角');
+    refreshList();
+  }
+  function beginMarking() {
+    if (saving || (index > 0 && data.review[index].keep !== '1')) return;
+    video.pause(); marking = true; corners = []; cornerFrame = null;
+    const lower = index ? data.flashes[index - 1] : 0;
+    if (video.currentTime < lower) video.currentTime = data.tracking.find(([time]) => time >= lower)[0];
+    $('message').classList.remove('error'); $('message').textContent = '只补标屏幕四角，已有的审核选择保持原样。';
+    refreshControls(); draw(presentedTime);
+  }
+  function drawCorners() {
+    const points = marking ? corners : currentCalibration()?.calibration.image_points_px;
+    if (!points?.length) return;
+    ctx.lineWidth = Math.max(3, canvas.width / 800); ctx.strokeStyle = '#4de2ff';
+    ctx.beginPath(); ctx.moveTo(...points[0]);
+    for (const p of points.slice(1)) ctx.lineTo(...p);
+    if (points.length === 4) ctx.closePath();
+    ctx.stroke();
+    points.forEach((p, i) => {
+      ctx.beginPath(); ctx.arc(...p, Math.max(6, canvas.width / 240), 0, 2 * Math.PI); ctx.stroke();
+      ctx.font = `${Math.max(20, canvas.width / 60)}px system-ui`;
+      ctx.lineWidth = 4; ctx.strokeStyle = '#10151d'; ctx.strokeText(String(i + 1), p[0] + 12, p[1] - 12);
+      ctx.fillStyle = '#4de2ff'; ctx.fillText(String(i + 1), p[0] + 12, p[1] - 12); ctx.strokeStyle = '#4de2ff';
+    });
+  }
+  canvas.onclick = event => {
+    if (!marking || saving || corners.length === 4) return;
+    if (video.seeking || video.readyState < 2 || Math.abs(presentedTime - video.currentTime) > 1 / data.fps) {
+      error('正在加载视频帧，请稍后再点角。'); return;
+    }
+    const rect = canvas.getBoundingClientRect(), scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
+    const x = (event.clientX - rect.left - (rect.width - canvas.width * scale) / 2) / scale;
+    const y = (event.clientY - rect.top - (rect.height - canvas.height * scale) / 2) / scale;
+    if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+    video.pause(); cornerFrame ??= frameAt(presentedTime); corners.push([x, y]);
+    $('message').classList.remove('error'); $('message').textContent = '';
+    refreshControls(); draw(presentedTime);
+  };
+  $('remark').onclick = beginMarking;
+  $('undocorner').onclick = () => { corners.pop(); if (!corners.length) cornerFrame = null; refreshControls(); draw(presentedTime); };
+  $('resetcorners').onclick = () => { corners = []; cornerFrame = null; refreshControls(); draw(presentedTime); };
+  $('cancelcorners').onclick = () => { marking = false; refreshControls(); draw(presentedTime); };
+  async function persistCalibration(request) {
+    if (saving) return;
+    const first = !data.calibration;
+    saving = true; refreshControls();
+    try {
+      const response = await fetch('/api/calibration', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(request)});
+      if (!response.ok) throw new Error(await response.text());
+      const result = await response.json(); data.calibration = result.calibration; data.calibrations = result.calibrations;
+      marking = false; saving = false;
+      if (first) { const pending = data.review.findIndex(r => r.keep === ''); select(pending < 0 ? 0 : pending); }
+      else draw(presentedTime);
+      $('message').classList.remove('error'); $('message').textContent = request.inherit ? '已恢复沿用上一次四角，后续未标注项也会跟随更新。' : '本次四角已保存到 calibration.json，后续未标注项自动沿用；原有 review.csv 保持原样。';
+    } catch (e) { error(`标定保存失败：${e.message}`); }
+    finally { saving = false; refreshControls(); if (marking) draw(presentedTime); }
+  }
+  $('savecorners').onclick = () => { if (corners.length === 4) persistCalibration({index, frame_index: cornerFrame, image_points_px: corners}); };
+  $('inheritcorners').onclick = () => persistCalibration({index, inherit: true});
+  $('nextkept').onclick = () => { const next = nextKept(); if (next >= 0) select(next); };
   function drawTimeline() {
     const bar = $('timeline'); bar.width = 1000; bar.height = 14; const c = bar.getContext('2d');
     c.clearRect(0, 0, 1000, 14);
@@ -117,13 +214,14 @@
     const track = activeTracking(), f = frameAt(time), point = track[f][1];
     const source = $('tracksource').value === 'raw' ? (point ? 'mediapipe' : 'missing') : data.tracking_status?.[f];
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawCorners();
     ctx.lineWidth = Math.max(3, canvas.width / 800); ctx.strokeStyle = '#ffc84b';
-    for (let i = Math.max(1, f - data.settings.trace_tail); i <= f; i++) {
+    for (let i = Math.max(1, f - data.settings.trace_tail); !marking && i <= f; i++) {
       const a = track[i - 1], b = track[i];
       if (!a[1] || !b[1] || a[0] < start) continue;
       ctx.beginPath(); ctx.moveTo(...a[1]); ctx.lineTo(...b[1]); ctx.stroke();
     }
-    if (point) { ctx.strokeStyle = source === 'optical_flow' ? '#42dfff' : '#42ef8a'; ctx.beginPath(); ctx.arc(...point, Math.max(9, canvas.width / 180), 0, 2 * Math.PI); ctx.stroke(); }
+    if (point && !marking) { ctx.strokeStyle = source === 'optical_flow' ? '#42dfff' : '#42ef8a'; ctx.beginPath(); ctx.arc(...point, Math.max(9, canvas.width / 180), 0, 2 * Math.PI); ctx.stroke(); }
     $('seek').value = time;
     const relative = (time - data.flashes[index]) * 1000;
     $('time').textContent = `${time.toFixed(2)} s · 距白闪 ${relative >= 0 ? '+' : ''}${relative.toFixed(0)} ms`;
@@ -131,10 +229,10 @@
     if (!video.paused && time >= end - 0.5 / data.fps) video.pause();
   }
   async function decide(keep) {
-    if (!data || saving) return;
+    if (!data || saving || marking) return;
     saving = true; video.pause();
     $('message').classList.remove('error'); $('message').textContent = '正在保存…';
-    for (const b of document.querySelectorAll('button')) b.disabled = true;
+    refreshControls();
     try {
       const response = await fetch('/api/review', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({index, keep})});
       if (!response.ok) throw new Error(await response.text());
@@ -142,10 +240,10 @@
       if (keep !== '' && index < data.review.length - 1) select(index + 1); else refreshList();
       $('message').textContent = data.review.every(r => r.keep !== '') ? '全部审核完成，已保存到 session 的 review.csv。可直接关闭页面。' : '已保存到 session 的 review.csv';
     } catch (e) { error(`保存失败，当前决定没有保存：${e.message}`); }
-    finally { saving = false; for (const b of document.querySelectorAll('button')) b.disabled = false; refreshList(); }
+    finally { saving = false; refreshControls(); }
   }
-  function togglePlay() { if (video.paused) { if (video.currentTime >= end - 0.5 / data.fps) video.currentTime = start; video.play().catch(e => error(e.message)); } else video.pause(); }
-  function step(delta) { video.pause(); const f = Math.max(0, Math.min(data.tracking.length - 1, frameAt(video.currentTime) + delta)); video.currentTime = Math.max(start, Math.min(end, data.tracking[f][0])); }
+  function togglePlay() { if (saving || marking) return; if (video.paused) { if (video.currentTime >= end - 0.5 / data.fps) video.currentTime = start; video.play().catch(e => error(e.message)); } else video.pause(); }
+  function step(delta) { if (saving || (marking && corners.length)) return; video.pause(); const f = Math.max(0, Math.min(data.tracking.length - 1, frameAt(video.currentTime) + delta)); video.currentTime = Math.max(start, Math.min(end, data.tracking[f][0])); }
   $('play').onclick = togglePlay;
   $('replay').onclick = () => { video.currentTime = start; video.play().catch(e => error(e.message)); };
   $('backframe').onclick = () => step(-1); $('nextframe').onclick = () => step(1);
@@ -171,12 +269,14 @@
       data = await response.json();
       document.querySelector('main').style.maxWidth = `${data.settings.display_max_width_px}px`;
       canvas.width = data.width; canvas.height = data.height;
-      $('session').textContent = data.session; $('result').textContent = `审核结果：${data.result_path}`;
+      $('session').textContent = data.session; $('result').textContent = `审核结果：${data.result_path} · 屏幕标定：${data.calibration_path}`;
       const info = data.tracking_info;
       $('model').textContent = info.model === 'external' ? '追踪来源：手动指定的 CSV' :
         `MediaPipe ${info.mediapipe} · ${info.model === 'full' ? '完整版' : '轻量版'}${info.continuity ? ' · 连续追踪' : ''}`;
       if (!data.raw_tracking) $('tracksource').disabled = true;
-      const pending = data.review.findIndex(r => r.keep === ''); index = pending < 0 ? 0 : pending;
+      const pending = data.review.findIndex(r => r.keep === ''); index = !data.calibration || pending < 0 ? 0 : pending;
+      marking = !data.calibration; refreshControls();
+      if (marking) $('message').textContent = '请先补标屏幕四角，已有的保留／舍弃结果保持原样。';
       video.onloadedmetadata = () => {
         if (video.videoWidth !== data.width || video.videoHeight !== data.height) { error('视频显示尺寸与追踪坐标不一致，请核查视频方向和追踪来源。'); return; }
         select(index);

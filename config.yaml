@@ -60,8 +60,14 @@ prediction:
   crossing_margin_u: 0.0
   reset_gap_ms: 300
   linear_history_ms: 100
+  # 跨线附近是高速段；线性外推统一缩小速度，近似跨线后的减速。
+  velocity_scale: 0.1
   linear_horizon_ms: 100
   linear_min_points: 3
+  time_statistic: median
+  clip_to_screen: true
+  # 空列表：扫描 dataset/session_*；仅纳入已有审核、四角标定和有效缓存的会话。
+  training_sessions: []
 
 evaluation:
   hit_radii_mm: [10, 20, 30]
@@ -69,6 +75,12 @@ evaluation:
 
 render:
   trajectory_tail: 18
+  demo_last_n: 10
+  playback_rate: 0.5
+  prediction_marker_radius_px: 20
+  demo_before_touch_ms: 1000
+  demo_before_crossing_ms: 200
+  demo_after_touch_ms: 200
 
 review:
   before_flash_ms: 1000
