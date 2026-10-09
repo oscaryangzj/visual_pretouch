@@ -75,6 +75,8 @@ alignment:
 
 prediction:
   crossing_margin_u: 0.0
+  # 只把触摸前恰好一次左→右跨线的 touch 纳入 M2/M3 派生样本；原始数据不删除。
+  crossing_policy: single_only
   reset_gap_ms: 300
   linear_history_ms: 100
   # 跨线附近是高速段；线性外推统一缩小速度，近似跨线后的减速。
@@ -101,6 +103,25 @@ m2:
     learning_rate: [0.03, 0.05]
     max_depth: [1, 2]
     min_samples_leaf: 10
+
+# M3：固定 300 ms 因果序列上的 tiny 单向 LSTM / GRU；不做网络或训练参数搜索。
+m3:
+  sequence_window_ms: 300
+  sequence_points: 10
+  input_dim: 3  # relative_u, relative_v, valid
+  static_dim: 3  # crossing_u, crossing_v, action_elapsed_ms
+  hidden_size: 16
+  recurrent_layers: 1
+  smooth_l1_beta: 0.05
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  batch_size: 32
+  max_epochs: 80
+  patience: 10
+  gradient_clip_norm: 1.0
+  inner_group_cv_folds: 3
+  random_state: 42
+
 
 evaluation:
   hit_radii_mm: [10, 15, 20, 30]

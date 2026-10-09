@@ -90,8 +90,10 @@ def prepare_session(session, cfg):
         action = project_trajectory(trajectory, calibration, start, time + cfg['render']['demo_after_touch_ms'])
         projected.extend({**r, 'trial_id': touch['trial_id'], 'touch_index': touch['touch_index'],
                           'calibration_source_trial_id': source['trial_id']} for r in action)
-        crossing = pipeline.find_crossing(action, start, time, cfg['task']['centerline_u'],
-                                          cfg['prediction']['crossing_margin_u'], cfg['tracking']['max_gap_ms'])
+        crossings = pipeline.find_crossings(action, start, time, cfg['task']['centerline_u'],
+                                             cfg['prediction']['crossing_margin_u'],
+                                             cfg['tracking']['max_gap_ms'])
+        crossing = crossings[0] if crossings else None
         if crossing and crossing['video_time_ms'] >= time:
             crossing = None
         gt = np.array([float(touch['touch_u']), float(touch['touch_v'])])
@@ -101,6 +103,7 @@ def prepare_session(session, cfg):
                        'touch_time_video_ms': time, 'flash_time_video_ms': flash,
                        'gt_u': float(gt[0]), 'gt_v': float(gt[1]), 'valid_gt': valid_gt,
                        'action_start_ms': start, 'crossing': crossing,
+                       'crossings': crossings, 'crossing_count': len(crossings),
                        'calibration': calibration, 'calibration_source_trial_id': source['trial_id'],
                        'calibration_source_touch_index': source['touch_index'],
                        'calibration_inherited': effective['inherited'],
@@ -198,7 +201,8 @@ def predict_trial(trial, prior_ms, velocity_scale=1.0, split='train'):
     return rows
 
 
-def evaluate(rows, trials, device_cfg, evaluation_cfg, split='train', methods=METHODS):
+def evaluate(rows, trials, device_cfg, evaluation_cfg, split='train', methods=METHODS,
+             crossing_policy='first'):
     by_key = {(t['trial_id'], t['touch_index']): t for t in trials}
     details = []
     for row in rows:
@@ -222,7 +226,9 @@ def evaluate(rows, trials, device_cfg, evaluation_cfg, split='train', methods=ME
         group = [r for r in details if r['method'] == method]
         good = [r for r in group if r['status'] == 'ok']
         errors = [r['error_normalized'] for r in good]
-        denominator = sum(t['keep'] == '1' and t['valid_gt'] for t in trials)
+        denominator = sum(t['keep'] == '1' and t['valid_gt']
+                          and (crossing_policy != 'single_only' or t.get('crossing_count', 1) == 1)
+                          for t in trials)
         summaries[method] = {'trials': len(group), 'protocol_valid_kept_trials': denominator, 'successes': len(good),
                              'coverage': len(good) / denominator if denominator else None,
                              'clipped_count': sum(r['clipped'] == 1 for r in good),

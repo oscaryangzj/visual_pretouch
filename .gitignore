@@ -9,5 +9,5 @@ __pycache__/
 /dataset/
 /data/
 
-# Keep lightweight reports, coordinates, configs and reproduction scripts.
+# Experiment outputs, generated media, caches, and processed datasets stay local.
 /outputs

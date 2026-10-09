@@ -36,7 +36,7 @@ touch CSV 在每次触摸时读取浏览器尺寸，并保存该会话所选设�
 
 每轮采集是独立 session。发起 touch CSV 和 session JSON 下载后可重新开始：保留样机选择，新一轮清空内存记录、重置 trial_id 并生成新 session_id，重新读取尺寸快照。网页无法获知文件是否保存成功，需在重开前确认两个文件均已保存。旧会话文件和采集数量不变。
 
-`config.yaml` 的 `devices` 按 `huawei_pura_x`、`huawei_mate_80_pro`、`iphone_16` 分组。三台设备的原生分辨率和毫米尺寸均由用户填写；具体数值以配置为准。各设备 `region_width_mm`、`region_height_mm` 对应实测采集区域物理宽高；全屏时对应屏幕显示区，不能填机身尺寸，非全屏时须对应实际网页区域。独立 HTML 内嵌同一份设备参数快照，配置变化后需同步页面。
+`config.yaml` 的 `devices` 按 `huawei_pura_x`、`huawei_mate_80_pro`、`iphone_16` 分组，保留这些参数以兼容采集页面。当前研究固定样机为 Huawei Mate 80 Pro；其余设备不属于当前固定样机实验条件。原生分辨率和毫米尺寸以配置为准。各设备 `region_width_mm`、`region_height_mm` 对应实测采集区域物理宽高；全屏时对应屏幕显示区，不能填机身尺寸，非全屏时须对应实际网页区域。独立 HTML 内嵌同一份设备参数快照，配置变化后需同步页面。
 
 评估优先使用 touch CSV 的 `device_id`，没有时使用配置中的 `device` 默认值，也可通过 `--device` 明确指定。混合设备或显式参数与记录冲突时报错。毫米评估仍读取选中设备的配置并写入指标和 manifest；v3 原始导出另外保留采集时的尺寸快照，后续配置修订不修改原始记录。旧版配置快照仍可使用原 `evaluation.region_width_mm/height_mm`。
 
@@ -47,7 +47,7 @@ touch CSV 在每次触摸时读取浏览器尺寸，并保存该会话所选设�
 * 浏览器触摸时间使用单调时钟并保存单位；与视频时钟分属不同时间轴，不能直接相减。
 * `flash_frame` 表示检测到白闪的帧；`touch_time_video_ms` 表示对齐后估计的触摸时刻，两者不能无条件视为相同。
 * 保存对齐方法、估计延迟和时间不确定性；未校准白闪延迟时必须标为近似对齐。白闪用于关联标签，不作为跨线触发信息。
-* `prediction_time_ms` 是跨线检测在当时已有帧上能够触发的时刻。跨线比较、去抖和多次跨线选择规则见待定决策，实施前需固定。
+* `prediction_time_ms` 是跨线检测在当时已有帧上能够触发的时刻。当前 M2/M3 使用恰好一次左→右跨线的 `single_only` 规则；完整定义见 [EXPERIMENTS.md](EXPERIMENTS.md#多次跨线过滤协议)。
 * 没有跨线、跨线不早于触摸、关键点缺失和对齐不确定都要显式记录，不能伪造事件。
 
 ## 存储布局
@@ -139,7 +139,7 @@ MediaPipe 的 `min_detection_confidence` 控制手掌检测接受门槛，`min_t
 
 ### M2 样本与预测数据
 
-M2 的样本单位是一次原始 touch，以 `(session_id, trial_id, touch_index)` 唯一标识。`split` 来自固定 `data_split`；训练样本仅纳入 `keep=1`、GT 有效且触摸前存在首次左→右跨线的试次。舍弃、无效 GT 和无跨线试次仍保留排除原因，测试评估不能静默删除模型失败。
+M2 的样本单位是一次原始 touch，以 `(session_id, trial_id, touch_index)` 唯一标识。`split` 来自固定 `data_split`；训练样本仅纳入 `keep=1`、GT 有效且触摸前恰好一次左→右跨线的试次；多次跨线样本保留在样本表中并记录排除原因。舍弃、无效 GT 和无跨线试次仍保留排除原因，测试评估不能静默删除模型失败。
 
 标签定义为 `delta_u=touch_u-crossing_u`、`delta_v=touch_v-crossing_v`。标签只用于训练或事后评估，不进入测试特征。特征的最大时间戳必须满足 `max_feature_time_ms <= prediction_time_ms`；禁止读取真实剩余触摸时间、跨线后的轨迹、当前试次目标位置或 GT。
 
@@ -158,7 +158,7 @@ M2 输出约定：
 | `raw_pred_u/v` | `crossing_uv + predicted_delta_uv`，允许有限越界 |
 | `pred_u/v`、`clipped` | 裁剪到 `[0,1]` 后用于主指标和视频的坐标，以及是否发生裁剪 |
 
-稳定方法标识为 `m2_median_delta`、`m2_model_a_ridge`、`m2_model_b_gradient_boosting`。M2 预测不使用 oracle 时间，`prediction_frame/time_ms` 与三种方法共用的首次跨线帧一致。
+稳定方法标识为 `m2_median_delta`、`m2_model_a_ridge`、`m2_model_b_gradient_boosting`。M2 预测不使用 oracle 时间，`prediction_frame/time_ms` 与三种方法共用的唯一有效跨线帧一致。
 
 ## 人工审核数据
 

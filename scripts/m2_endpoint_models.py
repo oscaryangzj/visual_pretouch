@@ -84,13 +84,17 @@ def slope(points, min_points):
     return value if np.isfinite(value).all() else np.array([np.nan, np.nan])
 
 
-def sample_from_trial(data, trial, cfg, split, device_id, device_cfg):
+def sample_from_trial(data, trial, cfg, split, device_id, device_cfg, crossing_policy='first'):
     crossing = trial['crossing']
+    crossing_count = int(trial.get('crossing_count', 1 if crossing is not None else 0))
+    multiple_crossings = crossing_policy == 'single_only' and crossing_count > 1
     reason = ('not_kept' if trial['keep'] != '1' else
               'invalid_ground_truth' if not trial['valid_gt'] else
+              'multiple_left_to_right_crossings_before_touch' if multiple_crossings else
               'no_left_to_right_crossing_before_touch' if crossing is None else '')
     sample = {k: trial[k] for k in ('session_id', 'trial_id', 'touch_index', 'keep')}
-    sample.update(split=split, device_id=device_id or '', eligible=int(not reason), exclusion_reason=reason,
+    sample.update(split=split, device_id=device_id or '', crossing_count=crossing_count,
+                  crossing_policy=crossing_policy, eligible=int(not reason), exclusion_reason=reason,
                   prediction_frame=crossing['frame_index'] if crossing else '',
                   prediction_time_ms=crossing['video_time_ms'] if crossing else '',
                   max_feature_time_ms=crossing['video_time_ms'] if crossing else '',
@@ -148,8 +152,11 @@ def sample_from_trial(data, trial, cfg, split, device_id, device_cfg):
 def prepare_samples(data, cfg, split):
     device_id, device_cfg = pipeline.evaluation_device(cfg, pipeline.read_csv(data['touches_path']))
     feature_cfg = cfg['m2']
+    crossing_policy = cfg['prediction'].get('crossing_policy', 'first')
+    if crossing_policy not in ('first', 'single_only'):
+        raise ValueError(f'unknown prediction.crossing_policy: {crossing_policy}')
     annotated = {**data, 'tracking_max_gap_ms': cfg['tracking']['max_gap_ms']}
-    return [sample_from_trial(annotated, trial, feature_cfg, split, device_id, device_cfg)
+    return [sample_from_trial(annotated, trial, feature_cfg, split, device_id, device_cfg, crossing_policy)
             for trial in data['trials']]
 
 
@@ -315,7 +322,9 @@ def main():
     models = {METHODS[1]: ridge, METHODS[2]: boosting}
     rows = [row for sample in test_samples for row in predict_sample(sample, median_delta, models, names)]
     _, device_cfg = pipeline.evaluation_device(cfg, pipeline.read_csv(target['touches_path']))
-    details, metrics = baseline_demo.evaluate(rows, selected_trials, device_cfg, cfg['evaluation'], 'test', METHODS)
+    crossing_policy = cfg['prediction'].get('crossing_policy', 'first')
+    details, metrics = baseline_demo.evaluate(rows, selected_trials, device_cfg, cfg['evaluation'],
+                                               'test', METHODS, crossing_policy=crossing_policy)
 
     pipeline.ensure_new(output)
     model_dir = output / 'models'

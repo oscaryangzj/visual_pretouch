@@ -6,9 +6,11 @@
 
 当前优先目标是 **快速、可信地验证研究假设**，而不是构建生产级系统。
 
-采用华为 puraX 做样机
+固定样机采用 Huawei Mate 80 Pro
 
-"screenWidth":1320,"screenHeight":2120
+"screenWidth":1280,"screenHeight":2832
+
+采集条件固定摄像头视角与手机相对摄像头的摆放姿态。
 
 仓库中用到的超参数放到 config.yaml 中
 

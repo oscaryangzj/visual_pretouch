@@ -313,9 +313,16 @@ def latest_valid_frame(rows: list[dict], start_ms: float, cutoff_ms: float) -> d
     return latest
 
 
-def find_crossing(rows: list[dict], start_ms: float, end_ms: float, centerline: float,
-                  margin: float, max_gap_ms: float) -> dict | None:
+def find_crossings(rows: list[dict], start_ms: float, end_ms: float, centerline: float,
+                   margin: float, max_gap_ms: float) -> list[dict]:
+    """Return every valid left-to-right crossing before the touch cutoff.
+
+    A crossing is counted only when two valid projected samples are close enough
+    in time and straddle the configured centerline. The returned row is the
+    right-side sample, which is also the causal prediction frame.
+    """
     previous = None
+    crossings = []
     for row in rows:
         t = as_float(row.get("video_time_ms"))
         if not math.isfinite(t) or t < start_ms:
@@ -329,9 +336,16 @@ def find_crossing(rows: list[dict], start_ms: float, end_ms: float, centerline: 
             continue
         if (previous is not None and t - previous["time"] <= max_gap_ms
                 and previous["u"] <= centerline - margin and u > centerline + margin):
-            return row
+            crossings.append(row)
         previous = {"time": t, "u": u}
-    return None
+    return crossings
+
+
+def find_crossing(rows: list[dict], start_ms: float, end_ms: float, centerline: float,
+                  margin: float, max_gap_ms: float) -> dict | None:
+    """Return the first valid left-to-right crossing for legacy callers."""
+    crossings = find_crossings(rows, start_ms, end_ms, centerline, margin, max_gap_ms)
+    return crossings[0] if crossings else None
 
 
 def linear_prediction(history: list[dict], window_ms: float, horizon_ms: float, min_points: int):

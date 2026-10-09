@@ -45,6 +45,31 @@ class M2EndpointTests(unittest.TestCase):
         self.assertLess(sample['path_length'], 0.3)
         self.assertFalse(math.isclose(sample['path_length'], math.sqrt(2), rel_tol=1e-6))
 
+    def test_multiple_crossings_are_counted_and_excluded(self):
+        rows = [
+            {'video_time_ms': 0, 'valid': '1', 'thumb_u': 0.40},
+            {'video_time_ms': 50, 'valid': '1', 'thumb_u': 0.55},
+            {'video_time_ms': 100, 'valid': '1', 'thumb_u': 0.45},
+            {'video_time_ms': 150, 'valid': '1', 'thumb_u': 0.60},
+        ]
+        crossings = pipeline.find_crossings(rows, 0, 200, 0.5, 0.0, 100.0)
+        self.assertEqual([row['video_time_ms'] for row in crossings], [50, 150])
+        self.assertEqual(pipeline.find_crossing(rows, 0, 200, 0.5, 0.0, 100.0)['video_time_ms'], 50)
+
+        trial = {
+            'session_id': 'train_a', 'trial_id': 'trial_0000', 'touch_index': '0', 'keep': '1',
+            'action_start_ms': 0.0, 'gt_u': 0.8, 'gt_v': 0.3, 'valid_gt': True,
+            'crossing': {'frame_index': 1, 'video_time_ms': 50.0, 'thumb_u': 0.55, 'thumb_v': 0.2},
+            'crossing_count': 2,
+        }
+        data = {'projected_trajectory': [], 'tracking_max_gap_ms': 100.0}
+        sample = m2.sample_from_trial(data, trial, self.feature_cfg, 'train', 'device',
+                                      {'region_width_mm': 70.0, 'region_height_mm': 150.0},
+                                      crossing_policy='single_only')
+        self.assertEqual(sample['crossing_count'], 2)
+        self.assertEqual(sample['eligible'], 0)
+        self.assertEqual(sample['exclusion_reason'], 'multiple_left_to_right_crossings_before_touch')
+
     def test_grouped_cv_never_shares_session_between_folds(self):
         names = ['crossing_u', 'crossing_v', 'action_elapsed_ms']
         samples = []

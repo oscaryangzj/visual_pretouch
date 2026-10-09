@@ -2,7 +2,8 @@
 
 ## 职责与当前状态
 
-本文维护评估方法和真实运行记录。研究范围见 [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md)，数据语义见 [DATA.md](DATA.md)。P0 代码已实现，已完成首组真实数据流程检查和新会话的数据质量诊断，尚无可报告的正式预测性能或研究结论。
+本文维护评估方法和真实运行记录。研究范围见 [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md)，数据语义见 [DATA.md](DATA.md)。M2/M3 已完成当前 10 个 session 的单次跨线 LOSO 比较；结果属于单用户、小规模开发集。固定 Mate 80 Pro 的后续采集目标与历史混合设备评估需区分。
+
 
 ## P0 评估协议
 
@@ -100,7 +101,66 @@ M2 固定使用与 M1 相同的首次有效左→右跨线帧 `t_c` 和跨线位
 
 已实现并验证：`config.yaml:m2` 的特征窗口与候选参数；`requirements.txt` 的 scikit-learn 依赖声明；`scripts/m2_endpoint_models.py` 的样本构造、增量中位数、分组交叉验证、Ridge、Gradient Boosting、模型保存、评估和三视频入口；`baseline_demo.py` 的通用方法列表评估与自定义视频标题支持。M2 专项 4 项测试和完整 26 项测试均通过。
 
-本轮已完成 `_5` 后 10 次真实运行、量化和抽帧核查。仍未完成的是完整测试 session 的正式报告、更多独立 session 的重复验证，以及把模型扩展到时序输入；这些不阻塞当前 M2 初版 demo。
+本轮已完成 `_5` 后 10 次真实运行、量化和抽帧核查；M3 小型 LSTM／GRU 也已完成 smoke test 和 10-fold LOSO。当前没有证据支持继续扩大时序模型。
+
+### M3 小型时序模型
+
+#### 研究问题与公平比较
+
+M3 检验“保留轨迹时间顺序”是否比 M2 的窗口汇总特征提供额外信息。首次左→右跨线帧、预测时刻、二维增量标签、GT、屏幕裁剪、设备毫米尺寸和排除原因全部沿用当前 `single_only` M2 LOSO。比较对象是同一批样本、同一 outer fold 重新拟合的 M2 Model A Ridge 与 Model B Gradient Boosting；增量中位数继续作为下限参考。冻结 tag `m2-baseline` 使用早期跨线规则，不作为该协议的配对预测。
+
+外层评估固定为当前 10 个 session 的 leave-one-session-out。每一轮用 1 个完整 session 测试，其余 9 个 session 训练。M3 必须和对应 M2 fold 使用完全相同的、经过 `single_only` 协议筛选的测试 touch ID；若样本集合不一致，运行失败并报告差异，不允许通过额外过滤改善时序模型成绩。
+
+#### 序列表示
+
+序列字段与插值规则由 [DATA.md](DATA.md#m3-序列样本) 维护。实验固定使用跨线前 300 ms、10 个等间隔时间点。循环层输入只有 `relative_u`、`relative_v` 和 `valid`，以便直接检验时序顺序，不再把 M2 的多窗口速度、路径长度或直线度特征喂给网络。循环层最终隐藏状态与 `crossing_u`、`crossing_v`、动作开始至跨线时长三个静态量拼接，再预测 `delta_u/delta_v`。
+
+#### 固定模型与训练参数
+
+首版不做超参数网格搜索。两种模型除循环单元外保持一致：
+
+| 参数 | LSTM | GRU |
+| --- | ---: | ---: |
+| 方法标识 | `m3_lstm_tiny` | `m3_gru_tiny` |
+| 输入维度 | 3 | 3 |
+| hidden size | 16 | 16 |
+| recurrent layers | 1 | 1 |
+| 方向 | 单向 | 单向 |
+| recurrent dropout | 0 | 0 |
+| 输出头 | `[hidden; 3 static] -> Linear(19,2)` | `[hidden; 3 static] -> Linear(19,2)` |
+| 预计可训练参数 | 约 1.4k | 约 1.1k |
+
+共同训练参数固定为：Smooth L1 loss（`beta=0.05`）、Adam（`lr=1e-3`、`weight_decay=1e-4`）、batch size 32、最多 80 epoch、gradient clip 1.0、随机种子 42。首版不搜索这些值，也不添加隐藏 MLP、归一化层、双向分支或 attention。
+
+每个外层 LOSO fold 内，用训练 session 做 3 折 GroupKFold，仅确定训练轮数：每个 inner fold 最多训练 80 epoch，以验证集裁剪后毫米误差中位数 early stop，patience 10；取三个 best epoch 的中位数并四舍五入，然后在外层全部 9 个训练 session 上从头训练该轮数。inner fold 的标准化只拟合 inner-train；最终模型的标准化只拟合外层全部训练 session。外层测试 session 不参与轮数选择、标准化或训练。
+
+#### 指标、产物与判断规则
+
+指标完全沿用 M2：每个 session 及跨 session 宏平均的 mean／median／P90 mm error、hit@10/15/20/30、裁剪比例、成功数和以全部协议有效 touch 为分母的命中率。另输出相对 Ridge／Gradient Boosting 的逐 session 误差差值和胜负数。首轮只生成统计和模型产物，不生成视频。
+
+一次运行计划输出：`sequence_index.csv`、`sequences.npz`、`sequence_schema.json`、inner-fold 轮数选择、训练曲线、每个外层 fold 的 LSTM／GRU 权重和预处理状态、`predictions.csv`、`per_session_metrics.csv`、`metrics.json`、配置快照、输入身份、git commit 和代码补丁。M2 对照预测及其 tag／commit 写入 manifest，但不复制修改 M2 模型。
+
+首轮结果按以下预先约定解释：相对 Gradient Boosting，若宏平均 median error 改善至少 1 mm 或 hit@10 提高至少 5 个百分点，并且至少 6/10 个测试 session 不劣化，才进入多随机种子复核；差异落在上述范围内视为暂不明确；明显更差则不扩大模型。单种子首轮只能筛选方向，不能作为时序模型稳定优于 M2 的最终结论。
+
+#### 实现与验收结果
+
+1. 先实现并测试序列构造；断言所有来源时间 `<= t_c`、跨缺失段不插值、样本 ID 与 M2 完全一致。
+2. 实现共享的小型循环回归器，再分别实例化 LSTM／GRU；记录实际参数量并要求小于 5k。
+3. 在一个 outer fold 上做 smoke test，核查 train／inner-val／test session 完全隔离和输出可复现。
+4. 跑完整 10-fold LOSO，无视频；生成与冻结 M2 的配对汇总。
+5. 结果满足上面的进入条件后，才增加 3 个固定随机种子复核；首版不扩大网络。
+
+实现入口为 `scripts/m3_sequence_models.py`，新增依赖为 `torch>=2.2,<3`，配置位于 `config.yaml:m3`。smoke test 和完整 10-fold LOSO 均通过；结果位于 `outputs/m3_sequence_models_v2/`。每个 fold 使用 192–212 个训练序列和 6–29 个测试序列，所有 218 个协议有效测试序列均成功输出。
+
+结果：
+
+| 方法 | mean mm | median mm | hit@10 | hit@15 | hit@20 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| M2 Model B Gradient Boosting | 10.87 | 9.28 | 54.0% | 80.8% | 91.2% |
+| M3 LSTM tiny | 11.85 | 11.01 | 45.4% | 67.1% | 87.9% |
+| M3 GRU tiny | 11.84 | 10.23 | 50.8% | 70.9% | 86.6% |
+
+结论：LSTM 只有 1/10 个 session 的 median error 不高于 Gradient Boosting，GRU 为 4/10；两者均未达到预设的“median 改善至少 1 mm 或 hit@10 提高至少 5 个百分点，且至少 6/10 session 不劣化”的进入条件。因此首轮不增加随机种子、不扩大网络，也不生成视频。这个结果只说明当前小数据、当前序列表示和追踪质量下，时序模型没有超过 M2 Model B，不能证明所有时序模型都无效。
 
 ### 数据划分
 
@@ -353,7 +413,7 @@ v4 仍是训练集上的开发 demo：系数和时间中位数都使用包含展
 
 ### M2 全 session leave-one-out 量化 · 2026-09-21 · 完成
 
-使用 `scripts/m2_all_sessions.py` 对 `config.yaml:data_split` 中的 10 个 session 逐一测试。每轮将当前 session 作为测试集，其余 9 个 session 作为训练集；每轮重新拟合增量中位数、Ridge 和 Gradient Boosting。运行使用 `--no-render`，只保存模型、预测、指标和汇总 CSV，不生成视频。每个 session 使用全部保留 touch；未检测到有效跨线的试次保留在分母中并记录失败原因。
+使用 `scripts/m2_all_sessions.py` 对 `config.yaml:data_split` 中的 10 个 session 逐一测试。每轮将当前 session 作为测试集，其余 9 个 session 作为训练集；每轮重新拟合增量中位数、Ridge 和 Gradient Boosting。运行使用 `--no-render`，只保存模型、预测、指标和汇总 CSV，不生成视频。旧冻结结果的每个 session 使用全部保留 touch；未检测到有效跨线的试次保留在分母中并记录失败原因。
 
 输出位于 `outputs/m2_leave_one_session_out_v2/`，总表为 `summary.csv`。跨 session 的宏平均结果如下，百分比是各 session 指标的简单平均，不是按 touch 数加权：
 
@@ -366,6 +426,24 @@ v4 仍是训练集上的开发 demo：系数和时间中位数都使用包含展
 这是按 session 留一法得到的开发集泛化参考；10 个 session 来自同一用户和相近采集条件，不能当作跨用户或跨设备结论。各 session 的有效 touch 数、失败数和完整指标以 `summary.csv` 及各子目录的 `metrics.json` 为准。
 
 结论与限制：在这 10 个测试 touch 上，两个学习方法都优于增量中位数，Gradient Boosting 的中位误差最低；这是一个有希望的初步结果。样本量只有 10 个展示 touch，且所有数据来自同一用户和当前采集条件，不能据此宣称跨用户、跨设备或完整测试集泛化。下一步先跑完整 `_5` 测试集和更多独立 session，再决定是否进入 M3 时序模型。
+
+### 多次跨线过滤协议 · 2026-09-22 · 完成
+
+问题：采集页面只记录成功触摸，没有记录触摸前的失败尝试。若同一动作在真实 touch 前多次从左侧进入右侧，单纯取第一次跨线会把失败尝试和最终 touch 错配。
+
+处理：`visual_pretouch.find_crossings()` 统计每个动作在 touch 截止前的全部有效左→右跨线。当前 `config.yaml` 设置 `prediction.crossing_policy: single_only`；M2 样本仅纳入恰好一次跨线的保留有效 touch，多次跨线行保留在 `samples.csv` 并记录 `multiple_left_to_right_crossings_before_touch`。该过滤同样是 M3 的共同样本协议，不改原始视频、touch CSV、review、追踪缓存或四角标定。
+
+实际统计：300 个 touch 中 261 个保留，43 个保留 touch 被排除，剩余 218 个单次跨线样本。10 个 session 的保留／多次／可用数量依次为 `25/9/16`、`10/4/6`、`27/5/22`、`25/3/22`、`30/1/29`、`28/5/23`、`30/6/24`、`28/2/26`、`30/4/26`、`28/4/24`。这里的“可用”还要求 GT 有效。
+
+已重新运行无渲染 LOSO，产物为 `outputs/m2_single_cross_loso_v2/summary.csv`。在新协议下，测试 session 的多次跨线样本不再进入协议有效分母；本次所有单次跨线样本均成功预测。宏平均结果如下，误差仅在成功预测样本上计算，命中率分母也是成功预测样本；每个 session 的覆盖率和排除原因在对应 `metrics.json` 中：
+
+| 方法 | mean mm | median mm | hit@10 | hit@15 | hit@20 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| M2 median delta | 14.90 | 13.60 | 33.1% | 54.8% | 73.2% |
+| M2 Model A Ridge | 14.59 | 13.30 | 47.5% | 72.2% | 85.8% |
+| M2 Model B Gradient Boosting | 10.87 | 9.28 | 54.0% | 80.8% | 91.2% |
+
+影响：旧 `m2-baseline` tag 和已有指标仍按冻结时的首次跨线协议保存，不能与新协议下的结果直接混比。M3 必须复用这批单次跨线样本。
 
 每次运行追加以下记录；数据和大文件通过路径引用，不粘贴进本文。
 
