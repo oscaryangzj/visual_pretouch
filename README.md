@@ -47,6 +47,12 @@ M2 与 M3 使用相同的 10-session、`single_only` leave-one-session-out（LOS
 
 这些数值来自同一用户的小规模开发集，不能解释为跨用户或独立设备泛化性能。旧 `m2-baseline` tag 使用较早的跨线筛选规则；当前表格采用 `single_only`，两种协议的历史结果不要直接混比。
 
+## M2 可视化 demo
+
+![M2 Model B（Gradient Boosting）演示：手机边界、中线、拇指轨迹与预测落点](docs/assets/m2_model_b_preview.gif)
+
+上方是 Huawei Mate 80 Pro 会话中 M2 Model B 的慢放可视化预览，展示拇指轨迹和跨线时生成的预测点。它用于查看渲染效果；量化结论请看上方当前 `single_only` LOSO 结果表。
+
 ## 快速开始
 
 需要 Python 3.11、FFmpeg 可读的视频，以及仓库要求的依赖。推荐使用 `visual_pretouch` conda 环境：
